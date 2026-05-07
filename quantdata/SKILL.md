@@ -1,7 +1,7 @@
 ---
 name: quantdata
-description: 量化数据源路由中心 | 支持股票/加密货币/行情查询 | 自动路由到westockdata/yfinance/baostock/futu/coingecko
-version: 0.2.0
+description: 量化数据源路由中心 | 支持股票/加密货币/期货/行情查询 | 自动路由到crawldata/westockdata/yfinance/baostock/futu/coingecko
+version: 0.3.0
 author: quantdata team
 tags:
   - stock
@@ -14,6 +14,7 @@ tags:
   - 股票
   - 行情
   - 加密货币
+  - 期货
   - 金融
 supported_markets:
   - A股（沪深/科创/北交所）
@@ -21,6 +22,7 @@ supported_markets:
   - 美股
   - 加密货币
   - 全球市场
+  - 国际期货
 ---
 
 # QuantData - 量化数据源路由中心
@@ -33,12 +35,13 @@ supported_markets:
 
 | 数据类型 | 触发词 | 路由目标 |
 |---------|-------|---------|
-| **A股股票** | A股、平安银行、sh600000、sz000001 | westockdata / baostockdata |
+| **A股股票** | A股、平安银行、sh600000、sz000001 | crawldata / westockdata / baostockdata |
 | **港股股票** | 港股、腾讯控股、hk00700 | westockdata / futuopendata / yfinancedata |
 | **美股股票** | 美股、苹果、AAPL | yfinancedata / westockdata / futuopendata |
+| **国际期货** | 黄金、原油、白银、hf_GC、hf_CL | crawldata / yfinancedata |
 | **加密货币** | BTC、比特币、ETH、以太坊、加密货币 | coingeckodata / okxdata / binancedata / yfinancedata |
 | **K线数据** | K线、kline、日线、周线、月线 | 根据市场自动路由 |
-| **实时行情** | 行情、实时、quote、价格 | westockdata / futuopendata |
+| **实时行情** | 行情、实时、quote、价格 | crawldata / westockdata / futuopendata |
 | **财务报表** | 财报、财务报表、profit | baostockdata / yfinancedata |
 | **资金流向** | 资金、资金流向 | westockdata |
 | **龙虎榜** | 龙虎榜、lhb | westockdata |
@@ -51,6 +54,8 @@ supported_markets:
 ✅ 查询 AAPL 股价
 ✅ 查询 腾讯控股 K线
 ✅ 查询 BTC 价格
+✅ 查询 黄金 价格
+✅ 查询 原油 价格
 ✅ 查询 平安银行 财报
 ✅ 查询 苹果公司 期权
 ✅ 查询 港股 实时行情
@@ -62,6 +67,7 @@ supported_markets:
 
 | 子技能 | 数据类型 | 市场覆盖 | 优势 |
 |--------|---------|---------|------|
+| **crawldata** | 腾讯财经爬虫 | A股/指数/国际期货 | 无限制、全字段解析、快速 |
 | **westockdata** | 腾讯自选股 | A股/港股/美股 | 实时行情、技术指标 |
 | **baostockdata** | 证券宝 | A股 | 1990年至今历史数据、无限制 |
 | **yfinancedata** | Yahoo Finance | 美股/全球/加密 | 财务报表、期权、分析师预期 |
@@ -78,16 +84,17 @@ supported_markets:
 
 | 市场类型 | 识别特征 | 优先数据源 | 备选数据源 |
 |---------|---------|-----------|-----------|
-| **A股** | `sh`/`sz`前缀、6位数字 | westockdata | baostockdata / futuopendata |
+| **A股** | `sh`/`sz`前缀、6位数字 | crawldata | westockdata / baostockdata / futuopendata |
 | **港股** | `hk`前缀、5位数字 | westockdata | futuopendata / yfinancedata |
 | **美股** | 纯字母、NYSE/NASDAQ | yfinancedata | westockdata / futuopendata |
+| **国际期货** | `hf_`前缀、黄金/原油/白银 | crawldata | yfinancedata |
 | **加密货币** | BTC/ETH/币安/OKX | coingeckodata | okxdata / binancedata / yfinancedata |
 
 ### 2. 按数据类型路由
 
 | 数据类型 | 识别关键词 | 优先数据源 |
 |---------|----------|-----------|
-| **实时行情** | `行情`、`quote`、`实时`、`价格` | westockdata / futuopendata |
+| **实时行情** | `行情`、`quote`、`实时`、`价格` | crawldata / westockdata / futuopendata |
 | **K线数据** | `K线`、`kline`、`日线`、`分钟` | 按市场路由 |
 | **财务报表** | `财报`、`财务`、`finance`、`利润表` | baostockdata / yfinancedata |
 | **资金流向** | `资金`、`流向`、`fund` | westockdata |
@@ -140,8 +147,9 @@ QuantData 内置智能重试机制，确保数据获取可靠性：
 
 | 需求场景 | 推荐数据源 | 原因 |
 |---------|----------|------|
-| **A股实时行情** | westockdata | 快速无限制 |
+| **A股实时行情** | crawldata | 快速无限制、全字段 |
 | **A股历史回测** | baostockdata | 1990年至今、无限制 |
+| **国际期货** | crawldata | 黄金/原油/白银实时价格 |
 | **港股实时** | futuopendata / westockdata | Level 2、逐笔 |
 | **美股数据** | yfinancedata | 最完整、期权/分析师预期 |
 | **加密货币** | coingeckodata | 免费无API Key |
@@ -166,6 +174,12 @@ QuantData 内置智能重试机制，确保数据获取可靠性：
 4. 在本文档更新子技能清单
 
 ## 📝 版本历史
+
+### v0.3.0 (2026-05-07)
+- 新增：crawldata 腾讯财经爬虫数据源
+- 新增：支持国际期货（黄金/原油/白银等）
+- 优化：A股实时行情优先使用 crawldata
+- 优化：完整字段解析（买卖五档、成交量、成交额等）
 
 ### v0.2.0 (2026-05-06)
 - 新增：coingeckodata/okxdata/binancedata 加密货币数据源

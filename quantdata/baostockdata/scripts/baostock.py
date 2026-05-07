@@ -70,7 +70,7 @@ def kline(code, start_date=None, end_date=None, frequency="d", adjustflag="3", t
 
         for row in data_list:
             (date, code, open_p, high, low, close, preclose, volume,
-             amount, adj_flag, turn, tradestatus, pctChg, isST) = row)
+             amount, adj_flag, turn, tradestatus, pctChg, isST) = row
             try:
                 open_p = float(open_p) if open_p else 0
                 high = float(high) if high else 0
