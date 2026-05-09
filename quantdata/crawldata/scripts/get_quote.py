@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 财经行情查询工具 - 整合腾讯财经(股票/指数/国际期货) + 新浪财经(中国期货)
+支持K线数据下载（日K/周K/月K/分钟K线）
 """
 
 import argparse
@@ -18,12 +19,21 @@ TENCENT_HEADERS = {
     "Referer": "https://finance.qq.com/",
 }
 
+# 腾讯K线接口
+TENCENT_KLINE_DAILY_URL = "https://data.gtimg.cn/flashdata/hushen/latest/daily/"
+TENCENT_KLINE_WEEKLY_URL = "https://data.gtimg.cn/flashdata/hushen/latest/weekly/"
+TENCENT_KLINE_MONTHLY_URL = "https://data.gtimg.cn/flashdata/hushen/monthly/"
+TENCENT_KLINE_YEARLY_URL = "https://data.gtimg.cn/flashdata/hushen/daily/"
+
 # 新浪财经接口（中国期货）
 SINA_API_URL = "http://hq.sinajs.cn/list="
 SINA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "http://finance.sina.com.cn/",
 }
+
+# 新浪K线接口
+SINA_KLINE_URL = "http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
 
 
 def to_float(value: str) -> Optional[float]:
@@ -496,6 +506,223 @@ def print_detail(quotes: List[Dict]):
             print(f"  {q['date']} {time_str}")
 
 
+# ========== K线数据功能 ==========
+
+def parse_tencent_kline(raw_text: str, code: str, period: str) -> List[Dict]:
+    """
+    解析腾讯K线数据
+    
+    Args:
+        raw_text: 原始数据文本
+        code: 股票代码
+        period: K线周期
+        
+    Returns:
+        K线数据列表
+    """
+    match = re.match(r'[^=]+\s*=\s*"([^"]+)"', raw_text)
+    if not match:
+        return []
+    
+    data_str = match.group(1)
+    if not data_str:
+        return []
+    
+    klines = []
+    lines = data_str.split('\\n\\\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('num:') or line.startswith('total:') or line.startswith('start:'):
+            continue
+        
+        fields = line.split()
+        if len(fields) < 6:
+            continue
+        
+        try:
+            # 格式: 220527 14.29 14.18 14.35 14.11 723067
+            # 日期 开盘 收盘 最高 最低 成交量
+            date_short = fields[0]
+            # 补全年份，假设20xx年
+            if len(date_short) == 6:
+                year = '20' + date_short[:2]
+                date = year + date_short[2:]
+            else:
+                date = date_short
+            
+            kline = {
+                "source": "tencent",
+                "code": code,
+                "period": period,
+                "date": date,
+                "open": to_float(fields[1]),
+                "close": to_float(fields[2]),
+                "high": to_float(fields[3]),
+                "low": to_float(fields[4]),
+                "volume": to_int(fields[5]),
+            }
+            
+            if len(fields) > 6:
+                kline["turnover"] = to_float(fields[6])
+            
+            klines.append(kline)
+        except:
+            continue
+    
+    return klines
+
+
+def fetch_tencent_kline(code: str, period: str = "daily", year: Optional[int] = None) -> List[Dict]:
+    """
+    从腾讯财经获取K线数据
+    
+    Args:
+        code: 股票代码，如 sz000001, sh600000
+        period: K线周期，支持 daily(日K), weekly(周K), monthly(月K)
+        year: 指定年份，仅对period=daily有效
+        
+    Returns:
+        K线数据列表
+    """
+    try:
+        if period == "daily" and year is not None:
+            # 指定年份的日K线
+            year_str = str(year)[-2:]
+            url = f"{TENCENT_KLINE_YEARLY_URL}{year_str}/{code}.js"
+        elif period == "daily":
+            url = f"{TENCENT_KLINE_DAILY_URL}{code}.js"
+        elif period == "weekly":
+            url = f"{TENCENT_KLINE_WEEKLY_URL}{code}.js"
+        elif period == "monthly":
+            url = f"{TENCENT_KLINE_MONTHLY_URL}{code}.js"
+        else:
+            print(f"不支持的K线周期: {period}")
+            return []
+        
+        response = requests.get(url, headers=TENCENT_HEADERS, timeout=10)
+        
+        for encoding in ['gbk', 'utf-8', 'gb2312']:
+            try:
+                text = response.content.decode(encoding)
+                break
+            except:
+                continue
+        else:
+            text = response.text
+        
+        return parse_tencent_kline(text, code, period)
+        
+    except Exception as e:
+        print(f"腾讯K线请求失败: {e}")
+        return []
+
+
+def parse_sina_kline(data: List[Dict], code: str, scale: int) -> List[Dict]:
+    """
+    解析新浪K线数据
+    
+    Args:
+        data: 新浪API返回的JSON数据
+        code: 股票代码
+        scale: K线周期（分钟数）
+        
+    Returns:
+        K线数据列表
+    """
+    klines = []
+    for item in data:
+        try:
+            kline = {
+                "source": "sina",
+                "code": code,
+                "period": f"{scale}min",
+                "datetime": item.get("day", ""),
+                "open": to_float(item.get("open")),
+                "high": to_float(item.get("high")),
+                "low": to_float(item.get("low")),
+                "close": to_float(item.get("close")),
+                "volume": to_int(item.get("volume")),
+            }
+            
+            date_str = kline["datetime"]
+            if len(date_str) >= 8:
+                kline["date"] = date_str[:8]
+            if len(date_str) >= 14:
+                kline["time"] = date_str[8:]
+            
+            klines.append(kline)
+        except:
+            continue
+    
+    return klines
+
+
+def fetch_sina_kline(code: str, scale: int = 5, ma: int = 5, datalen: int = 1023) -> List[Dict]:
+    """
+    从新浪财经获取K线数据
+    
+    Args:
+        code: 股票代码，如 sz000001, sh600000
+        scale: K线周期（分钟数），支持 5, 15, 30, 60
+        ma: 均线周期
+        datalen: 数据长度
+        
+    Returns:
+        K线数据列表
+    """
+    try:
+        params = {
+            "symbol": code,
+            "scale": scale,
+            "ma": ma,
+            "datalen": datalen
+        }
+        
+        response = requests.get(SINA_KLINE_URL, params=params, headers=SINA_HEADERS, timeout=10)
+        
+        data = response.json()
+        if not isinstance(data, list):
+            return []
+        
+        return parse_sina_kline(data, code, scale)
+        
+    except Exception as e:
+        print(f"新浪K线请求失败: {e}")
+        return []
+
+
+def print_kline(klines: List[Dict]):
+    """打印K线数据"""
+    if not klines:
+        print("未获取到K线数据")
+        return
+    
+    code = klines[0].get("code", "")
+    period = klines[0].get("period", "")
+    source = "腾讯" if klines[0].get("source") == "tencent" else "新浪"
+    
+    print(f"\n" + "="*100)
+    print(f"【K线数据】{code} - {period} - {source}")
+    print("="*100)
+    print(f"{'日期':<12} {'开盘':<10} {'最高':<10} {'最低':<10} {'收盘':<10} {'成交量':<12} {'成交额':<12}")
+    print("-"*100)
+    
+    for k in klines:
+        date = k.get("date", k.get("datetime", ""))
+        open_p = f"{k['open']:.2f}" if k.get('open') is not None else "-"
+        high_p = f"{k['high']:.2f}" if k.get('high') is not None else "-"
+        low_p = f"{k['low']:.2f}" if k.get('low') is not None else "-"
+        close_p = f"{k['close']:.2f}" if k.get('close') is not None else "-"
+        volume = str(k.get("volume", "-"))
+        turnover = f"{k.get('turnover', '-')}" if k.get('turnover') is not None else "-"
+        
+        print(f"{date:<12} {open_p:<10} {high_p:<10} {low_p:<10} {close_p:<10} {volume:<12} {turnover:<12}")
+    
+    print("="*100)
+    print(f"共 {len(klines)} 条K线数据")
+
+
 def print_json(quotes: List[Dict]):
     """JSON格式输出"""
     output = []
@@ -507,7 +734,15 @@ def print_json(quotes: List[Dict]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="财经行情查询工具 - 腾讯财经(股票/指数/国际期货) + 新浪财经(中国期货)")
+    parser = argparse.ArgumentParser(description="财经行情查询工具 - 腾讯财经(股票/指数/国际期货) + 新浪财经(中国期货)\n支持K线数据下载")
+    
+    # K线查询模式
+    parser.add_argument("--kline", action="store_true", help="K线数据查询模式")
+    parser.add_argument("--period", default="daily", help="K线周期: daily/weekly/monthly/5min/15min/30min/60min (默认: daily)")
+    parser.add_argument("--year", type=int, help="指定年份（仅对daily周期有效）")
+    parser.add_argument("--source", default="tencent", help="K线数据源: tencent/sina (默认: tencent)")
+    
+    # 普通行情查询
     parser.add_argument("codes", nargs="+", help="代码列表\n"
                         "股票/指数: sh600000 sz000001\n"
                         "国际期货: hf_GC hf_CL\n"
@@ -517,18 +752,38 @@ def main():
     
     args = parser.parse_args()
     
-    quotes = fetch_quotes(args.codes)
-    
-    if not quotes:
-        print("未获取到数据")
-        return
-    
-    if args.json:
-        print_json(quotes)
-    elif args.detail:
-        print_detail(quotes)
+    if args.kline:
+        # K线查询模式
+        for code in args.codes:
+            if args.source == "sina":
+                # 新浪K线
+                scale_map = {"5min": 5, "15min": 15, "30min": 30, "60min": 60}
+                scale = scale_map.get(args.period, 5)
+                klines = fetch_sina_kline(code, scale=scale)
+            else:
+                # 腾讯K线
+                period_map = {"daily": "daily", "weekly": "weekly", "monthly": "monthly"}
+                period = period_map.get(args.period, "daily")
+                klines = fetch_tencent_kline(code, period=period, year=args.year)
+            
+            if args.json:
+                print(json.dumps(klines, ensure_ascii=False, indent=2))
+            else:
+                print_kline(klines)
     else:
-        print_simple(quotes)
+        # 普通行情查询
+        quotes = fetch_quotes(args.codes)
+        
+        if not quotes:
+            print("未获取到数据")
+            return
+        
+        if args.json:
+            print_json(quotes)
+        elif args.detail:
+            print_detail(quotes)
+        else:
+            print_simple(quotes)
 
 
 if __name__ == "__main__":

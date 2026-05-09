@@ -1,12 +1,12 @@
 ---
 name: crawldata
-description: 财经爬虫数据接口 - 腾讯财经(股票/指数/国际期货) + 新浪财经(中国期货)实时行情查询
+description: 财经爬虫数据接口 - 腾讯财经(股票/指数/国际期货) + 新浪财经(中国期货)实时行情查询 + K线数据下载
 disable-model-invocation: true
 ---
 
 # CrawlData - 财经爬虫数据接口
 
-整合腾讯财经和新浪财经公开接口，提供全面的实时行情数据查询。
+整合腾讯财经和新浪财经公开接口，提供全面的实时行情数据查询和K线数据下载。
 
 ## 接口信息
 
@@ -22,6 +22,18 @@ disable-model-invocation: true
 - **数据格式**: JavaScript变量，以 `,` 分隔字段
 - **编码**: GBK
 - **需要Header**: `Referer: http://finance.sina.com.cn/`
+
+## K线数据接口
+
+### 腾讯K线接口（推荐）
+- **日K线**: `https://data.gtimg.cn/flashdata/hushen/latest/daily/{code}.js`
+- **周K线**: `https://data.gtimg.cn/flashdata/hushen/latest/weekly/{code}.js`
+- **月K线**: `https://data.gtimg.cn/flashdata/hushen/monthly/{code}.js`
+- **指定年份日K**: `https://data.gtimg.cn/flashdata/hushen/daily/{year}/{code}.js`
+
+### 新浪K线接口（分钟K线）
+- **接口地址**: `http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData`
+- **参数**: `symbol={code}&scale={minutes}&ma={ma}&datalen={datalen}`
 
 ## 支持品种
 
@@ -204,6 +216,58 @@ v_sh600000="1~浦发银行~600000~8.50~8.45~8.48~1234567~...";
 ## 脚本使用
 
 见 `scripts/` 目录下的查询脚本。
+
+### get_quote.py - 综合行情查询脚本
+
+#### 实时行情查询
+```bash
+# 查看帮助
+python scripts/get_quote.py --help
+
+# 查询单个品种
+python scripts/get_quote.py sh600000
+
+# 批量查询
+python scripts/get_quote.py sh600000 sz000001 hf_GC
+
+# 详细信息输出
+python scripts/get_quote.py sh600000 --detail
+
+# JSON格式输出
+python scripts/get_quote.py sh600000 --json
+```
+
+#### K线数据查询
+```bash
+# 腾讯日K线（默认）
+python scripts/get_quote.py --kline sz000001
+
+# 腾讯周K线
+python scripts/get_quote.py --kline --period weekly sz000001
+
+# 腾讯月K线
+python scripts/get_quote.py --kline --period monthly sz000001
+
+# 腾讯指定年份日K线
+python scripts/get_quote.py --kline --year 2024 sz000001
+
+# 新浪5分钟K线
+python scripts/get_quote.py --kline --source sina --period 5min sz000001
+
+# 新浪15分钟K线
+python scripts/get_quote.py --kline --source sina --period 15min sz000001
+
+# K线JSON输出
+python scripts/get_quote.py --kline sz000001 --json
+```
+
+#### K线查询参数说明
+| 参数 | 说明 | 可选值 |
+|------|------|--------|
+| `--kline` | 启用K线查询模式 | - |
+| `--period` | K线周期 | daily/weekly/monthly/5min/15min/30min/60min |
+| `--year` | 指定年份（仅腾讯日K有效） | 如2024 |
+| `--source` | 数据源 | tencent（默认）/ sina |
 
 ## 相关文档
 

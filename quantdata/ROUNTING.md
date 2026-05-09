@@ -130,8 +130,8 @@ def query_with_retry(ticker, max_retries=3):
 
 | 证券市场 | 代码前缀 | 代码示例 | 优先数据源 | 备选数据源 | 说明 |
 |---------|---------|---------|----------|-----------|------|
-| **上海证券市场** | sh. / SH. | sh.600000 | crawldata ⭐ | westockdata / baostockdata | 沪市主板、科创板 |
-| **深圳证券市场** | sz. / SZ. | sz.000001 | crawldata ⭐ | westockdata / baostockdata | 深市主板、创业板 |
+| **上海证券市场** | sh. / SH. | sh.600000 | westockdata ⭐ | crawldata / baostockdata | 沪市主板、科创板 |
+| **深圳证券市场** | sz. / SZ. | sz.000001 | westockdata ⭐ | crawldata / baostockdata | 深市主板、创业板 |
 | **北京证券交易所** | bj. / BJ. | bj.430047 | westockdata | baostockdata | 北交所 |
 | **香港证券市场** | hk. / HK. / .HK | 0700.HK | westockdata | yfinancedata | 港股主板、窝轮、牛熊证 |
 | **美国证券市场** | us. / US. / 纯字母 | AAPL | yfinancedata ⭐ | westockdata | 美股（NYSE、NASDAQ、AMEX） |
@@ -155,16 +155,16 @@ def query_with_retry(ticker, max_retries=3):
 
 | 证券市场 | 数据类型 | crawldata | westockdata | baostockdata | yfinancedata | 说明 |
 |---------|---------|----------|-------------|--------------|----------|------|
-| 上海 | 实时价格 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | crawldata优先，全字段 |
-| 上海 | K线数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | baostockdata历史更长 |
-| 上海 | 分钟数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | westockdata实时，baostockdata历史长 |
+| 上海 | 实时价格 | ✅ 支持 | ✅ **支持 ⭐** | ❌ 不支持 | ❌ 不支持 | westockdata优先，全字段 |
+| 上海 | K线数据 | ✅ 支持 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | westockdata优先，支持日K/周K/月K |
+| 上海 | 分钟数据 | ✅ 支持 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | westockdata实时，crawldata支持5分钟K |
 | 上海 | 财务报表 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
 | 上海 | 资金流向 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | 仅westockdata |
 | 上海 | 技术指标 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | 仅westockdata |
 | 上海 | 分红数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
-| 深圳 | 实时价格 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | crawldata优先，全字段 |
-| 深圳 | K线数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | baostockdata历史更长 |
-| 深圳 | 分钟数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | westockdata实时，baostockdata历史长 |
+| 深圳 | 实时价格 | ✅ 支持 | ✅ **支持 ⭐** | ❌ 不支持 | ❌ 不支持 | westockdata优先，全字段 |
+| 深圳 | K线数据 | ✅ 支持 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | westockdata优先，支持日K/周K/月K |
+| 深圳 | 分钟数据 | ✅ 支持 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | westockdata实时，crawldata支持5分钟K |
 | 深圳 | 财务报表 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
 | 深圳 | 资金流向 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | 仅westockdata |
 | 深圳 | 技术指标 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | 仅westockdata |
@@ -190,10 +190,10 @@ def query_with_retry(ticker, max_retries=3):
 
 | 证券市场 | 数据类型 | crawldata | westockdata | baostockdata | yfinancedata | 说明 |
 |---------|---------|----------|-------------|--------------|----------|------|
-| 上海 | 实时行情 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | crawldata优先，全字段 |
-| 上海 | K线数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
-| 深圳 | 实时行情 | ✅ **支持 ⭐** | ✅ 支持 | ❌ 不支持 | ❌ 不支持 | crawldata优先，全字段 |
-| 深圳 | K线数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
+| 上海 | 实时行情 | ✅ 支持 | ✅ **支持 ⭐** | ❌ 不支持 | ❌ 不支持 | westockdata优先，全字段 |
+| 上海 | K线数据 | ✅ 支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
+| 深圳 | 实时行情 | ✅ 支持 | ✅ **支持 ⭐** | ❌ 不支持 | ❌ 不支持 | westockdata优先，全字段 |
+| 深圳 | K线数据 | ✅ 支持 | ✅ 支持 | ✅ 支持 | ❌ 不支持 | 均支持 |
 | 香港 | 实时行情 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ✅ 支持 | yfinancedata优先 |
 | 香港 | K线数据 | ❌ 不支持 | ✅ 支持 | ❌ 不支持 | ✅ 支持 | yfinancedata优先 |
 | **美国** | **实时行情** | ❌ 不支持 | ❌ 不支持 | ❌ 不支持 | ✅ **支持 ⭐** | **yfinancedata专用** |
@@ -205,7 +205,7 @@ def query_with_retry(ticker, max_retries=3):
 | 证券市场 | 数据类型 | crawldata | yfinancedata | okxdata | binancedata | 说明 |
 |---------|---------|----------|--------------|----------|----------|------|
 | **国际期货** | **实时价格** | ✅ **支持 ⭐** | ✅ 支持 | ⚠️ 支持 | ⚠️ 支持 | crawldata优先，黄金/原油/白银 |
-| **国际期货** | K线数据 | ❌ 不支持 | ✅ 支持 | ✅ 支持 | ✅ 支持 | yfinancedata优先 |
+| **国际期货** | K线数据 | ✅ 支持 | ✅ 支持 | ✅ 支持 | ✅ 支持 | yfinancedata优先 |
 
 #### 3. 基金 (ETF/Fund)
 
@@ -241,18 +241,18 @@ def query_with_retry(ticker, max_retries=3):
 
 | 数据类型 | 详细描述 | 路由目标 | 适用市场 |
 |---------|---------|---------|---------|
-| **实时价格** | 实时行情快照 | `crawldata` / `westockdata` / `yfinancedata` | A股、港股、美股、国际期货 |
-| **当日行情** | 当日完整行情 | `crawldata` / `westockdata` / `yfinancedata` | A股、港股、美股、国际期货 |
-| **盘口数据** | 买卖盘口 | `crawldata` / `westockdata` | A股、港股 |
+| **实时价格** | 实时行情快照 | `westockdata` / `crawldata` / `yfinancedata` | A股、港股、美股、国际期货 |
+| **当日行情** | 当日完整行情 | `westockdata` / `crawldata` / `yfinancedata` | A股、港股、美股、国际期货 |
+| **盘口数据** | 买卖盘口 | `westockdata` / `crawldata` | A股、港股 |
 
 #### B. K线数据 (Kline)
 
 | 数据类型 | 详细描述 | 优先数据源 | 备选数据源 | 说明 |
 |---------|---------|-----------|-----------|------|
-| **日K线** | 日线数据 | `baostockdata` | `westockdata` / `yfinancedata` | baostockdata历史更长(1990至今) |
-| **周K线** | 周线数据 | `baostockdata` | `westockdata` / `yfinancedata` | baostockdata历史更长 |
-| **月K线** | 月线数据 | `baostockdata` | `westockdata` / `yfinancedata` | baostockdata历史更长 |
-| **5分钟K线** | 5分钟数据 | `westockdata` | `yfinancedata` | westockdata实时性好 |
+| **日K线** | 日线数据 | `westockdata` | `crawldata` / `baostockdata` / `yfinancedata` | westockdata优先 |
+| **周K线** | 周线数据 | `westockdata` | `crawldata` / `baostockdata` / `yfinancedata` | westockdata优先 |
+| **月K线** | 月线数据 | `westockdata` | `crawldata` / `baostockdata` / `yfinancedata` | westockdata优先 |
+| **5分钟K线** | 5分钟数据 | `westockdata` | `crawldata` / `yfinancedata` | westockdata实时性好 |
 | **15分钟K线** | 15分钟数据 | `westockdata` | `yfinancedata` | westockdata实时性好 |
 | **30分钟K线** | 30分钟数据 | `westockdata` | `yfinancedata` | westockdata实时性好 |
 | **60分钟K线** | 60分钟数据 | `westockdata` | `yfinancedata` | westockdata实时性好 |
@@ -441,7 +441,7 @@ def route_request(market: str, security_type: str, data_type: str, max_retries=3
   - 实时性要求 → 高
 路由结果：
   - 优先：westockdata（实时性好）
-  - 备选：yfinancedata（历史5分钟线）
+  - 备选：crawldata（支持5分钟K）
 ```
 
 ### 场景4：综合财务分析
@@ -466,8 +466,8 @@ def route_request(market: str, security_type: str, data_type: str, max_retries=3
 
 | 数据类型 | A股 | 港股 | 美股 | 国际期货 |
 |---------|-----|------|------|---------|
-| 实时行情 | crawldata | westockdata / yfinancedata | yfinancedata | crawldata |
-| 日K线 | baostockdata | yfinancedata | yfinancedata | yfinancedata |
+| 实时行情 | westockdata | westockdata / yfinancedata | yfinancedata | crawldata |
+| 日K线 | westockdata | yfinancedata | yfinancedata | yfinancedata |
 | 分钟K线 | westockdata | yfinancedata | yfinancedata | yfinancedata |
 | 财务报表 | baostockdata | yfinancedata | yfinancedata | - |
 | 资金流向 | westockdata | westockdata | westockdata | - |
@@ -485,27 +485,27 @@ def route_request(market: str, security_type: str, data_type: str, max_retries=3
 | 功能 | crawldata | westockdata | baostockdata | yfinancedata |
 |------|-----------|------------|--------------|------------------|
 | **市场覆盖** | | | | |
-| A股 | ✅⭐ | ✅ | ✅ | ⚠️ |
+| A股 | ✅ | ✅⭐ | ✅ | ⚠️ |
 | 港股 | ❌ | ✅ | ❌ | ✅ |
 | 美股 | ❌ | ⚠️ | ❌ | ✅⭐ |
 | 国际期货 | ✅⭐ | ❌ | ❌ | ✅ |
 | 外汇 | ❌ | ❌ | ❌ | ✅ |
 | 加密货币 | ❌ | ❌ | ❌ | ✅ |
 | **数据类型** | | | | |
-| 实时行情 | ✅⭐ | ✅ | ❌ | ✅ |
-| 买卖五档 | ✅⭐ | ✅ | ❌ | ✅ |
-| 历史K线 | ❌ | ✅ | ✅ | ✅ |
-| 分钟数据 | ❌ | ✅ | ✅ | ✅ |
+| 实时行情 | ✅ | ✅⭐ | ❌ | ✅ |
+| 买卖五档 | ✅ | ✅⭐ | ❌ | ✅ |
+| 历史K线 | ✅ | ✅⭐ | ✅ | ✅ |
+| 分钟数据 | ✅ | ✅⭐ | ✅ | ✅ |
 | 财务报表 | ❌ | ✅ | ✅ | ✅ |
-| 资金流向 | ❌ | ✅ | ❌ | ❌ |
-| 技术指标 | ❌ | ✅ | ❌ | ❌ |
+| 资金流向 | ❌ | ✅⭐ | ❌ | ❌ |
+| 技术指标 | ❌ | ✅⭐ | ❌ | ❌ |
 | 期权数据 | ❌ | ❌ | ❌ | ✅ |
 | **数据深度** | | | | |
 | 最早数据 | - | 较短 | 1990年⭐ | 20年+ |
 | 财务历史 | - | 有限 | 2007年+ | 10年+ |
 | **字段完整性** | | | | |
-| 完整字段解析 | ✅⭐ | ✅ | ✅ | ✅ |
-| 成交额/换手率 | ✅⭐ | ✅ | ✅ | ✅ |
+| 完整字段解析 | ✅ | ✅⭐ | ✅ | ✅ |
+| 成交额/换手率 | ✅ | ✅⭐ | ✅ | ✅ |
 | **重试机制** | | | | |
 | 自动重试 | ✅ | ✅ | ✅ | ✅ |
 | 最大重试次数 | 3次 | 3次 | 3次 | 3次 |
@@ -521,9 +521,9 @@ skills:
   crawldata:
     path: crawldata
     enabled: true
-    priority: 15
+    priority: 10
     markets: [sh, sz, futures]
-    data_types: [quote, tick, depth]
+    data_types: [quote, kline, tick, depth]
     retry:
       max_attempts: 3
       backoff: exponential
@@ -532,7 +532,7 @@ skills:
   westockdata:
     path: westockdata
     enabled: true
-    priority: 10
+    priority: 15
     markets: [sh, sz, bj, hk, us]
     data_types: [quote, kline, minute, financial, fund, technical]
     retry:
@@ -566,7 +566,7 @@ skills:
 ### 路由规则优先级
 
 ```
-1. 实时数据 → crawldata（A股/期货）
+1. 实时数据 → westockdata（A股）
 2. 国际期货 → crawldata
 3. 技术指标 → westockdata
 4. 资金流向 → westockdata
@@ -574,7 +574,7 @@ skills:
 6. 宏观经济 → baostockdata
 7. 杜邦分析 → baostockdata
 8. 长周期K线 → baostockdata
-9. A股日线 → baostockdata（优先）
+9. A股K线 → westockdata（优先）
 ```
 
 ---
@@ -641,6 +641,14 @@ retry_policy:
 ---
 
 ## 版本历史
+
+### v1.2.0 (2026-05-09)
+
+- 新增：crawldata 支持K线数据（日K/周K/月K/5分钟K）
+- 优化：调整优先级，westockdata 优先于 crawldata
+- 更新：路由规则表中 westockdata 设为默认数据源
+- 更新：子技能注册表调整优先级（westockdata 15, crawldata 10）
+- 更新：K线数据路由添加 crawldata 作为备选
 
 ### v1.1.0 (2026-05-07)
 

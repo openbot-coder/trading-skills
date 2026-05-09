@@ -42,10 +42,36 @@ quantdata/
 ├── binancedata/
 │   └── scripts/
 │       └── binance.py          # Binance 综合脚本（推荐）
+├── crawldata/
+│   └── scripts/
+│       └── get_quote.py        # 腾讯/新浪财经综合脚本（推荐）- 实时行情 + K线
 └── README_SCRIPTS.md          # 本文档
 ```
 
 ## 综合脚本使用（推荐）
+
+### 0. CrawlData - crawldata/scripts/get_quote.py (A股/K线推荐)
+
+```bash
+# 查看帮助
+python quantdata/crawldata/scripts/get_quote.py --help
+
+# 实时行情查询
+python quantdata/crawldata/scripts/get_quote.py sh600000
+python quantdata/crawldata/scripts/get_quote.py sh600000 sz000001 hf_GC M0
+python quantdata/crawldata/scripts/get_quote.py sh600000 --detail
+python quantdata/crawldata/scripts/get_quote.py sh600000 --json
+
+# K线数据查询 - 腾讯财经（推荐）
+python quantdata/crawldata/scripts/get_quote.py --kline sz000001
+python quantdata/crawldata/scripts/get_quote.py --kline --period weekly sz000001
+python quantdata/crawldata/scripts/get_quote.py --kline --period monthly sz000001
+python quantdata/crawldata/scripts/get_quote.py --kline --year 2024 sz000001
+
+# K线数据查询 - 新浪财经（分钟K线）
+python quantdata/crawldata/scripts/get_quote.py --kline --source sina --period 5min sz000001
+python quantdata/crawldata/scripts/get_quote.py --kline --source sina --period 15min sz000001
+```
 
 ### 1. CoinGecko - coingeckodata/scripts/coingecko.py
 
@@ -178,6 +204,7 @@ python quantdata/binancedata/scripts/binance.py kline BTCUSDT --interval 1d --li
 
 | 数据源 | 综合脚本 | 主要功能 |
 |--------|---------|---------|
+| **crawldata** | `get_quote.py` | A股实时行情、期货行情、K线数据（日K/周K/月K/分钟K） |
 | **coingeckodata** | `coingecko.py` | 加密货币价格、市值排行、K线、全球数据 |
 | **yfinancedata** | `yfinance.py` | 美股/全球股票、K线、财务数据 |
 | **baostockdata** | `baostock.py` | A股K线、财务数据、宏观经济 |
