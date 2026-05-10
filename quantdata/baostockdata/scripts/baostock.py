@@ -106,7 +106,7 @@ def kline(code, start_date=None, end_date=None, frequency="d", adjustflag="3", t
         print(f"查询失败: {e}")
         try:
             bs.logout()
-        except:
+        except Exception:
             pass
 
 
@@ -142,7 +142,7 @@ def profit_data(code, year=2023, quarter=4):
         print(f"查询失败: {e}")
         try:
             bs.logout()
-        except:
+        except Exception:
             pass
 
 

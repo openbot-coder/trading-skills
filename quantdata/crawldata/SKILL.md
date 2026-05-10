@@ -269,6 +269,31 @@ python scripts/get_quote.py --kline sz000001 --json
 | `--year` | 指定年份（仅腾讯日K有效） | 如2024 |
 | `--source` | 数据源 | tencent（默认）/ sina |
 
+#### 缓存控制参数
+| 参数 | 说明 |
+|------|------|
+| `--no-cache` | 禁用缓存（每次请求都从网络获取） |
+| `--clear-cache` | 清除所有缓存并退出 |
+
+## 缓存机制
+
+### 缓存策略
+- **实时行情**: A股3秒，其他市场1秒
+- **K线数据**: 1小时
+- **缓存存储**: 内存 + 文件双重缓存
+
+### 缓存目录
+默认缓存目录：`~/.quantdata_cache/`
+
+### 缓存清除
+```bash
+# 清除所有缓存
+python scripts/get_quote.py --clear-cache
+
+# 单次不使用缓存
+python scripts/get_quote.py --no-cache sh600000
+```
+
 ## 相关文档
 
 - `references/field_reference.md` - 完整字段参考

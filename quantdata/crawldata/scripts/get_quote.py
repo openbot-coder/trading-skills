@@ -9,6 +9,23 @@ import requests
 import re
 import json
 from typing import List, Dict, Optional, Union
+import sys
+import os
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from cache import get_cache, determine_ttl
+
+# 获取全局缓存实例
+cache = get_cache()
+
+# 全局缓存开关
+CACHE_ENABLED = True
+
+
+def is_cache_enabled() -> bool:
+    """检查缓存是否启用"""
+    return CACHE_ENABLED
 
 # 腾讯财经接口（股票、指数、国际期货）
 TENCENT_API_URL = "https://qt.gtimg.cn/q="
@@ -301,10 +318,26 @@ def parse_sina_quote(raw_line: str, original_code: str) -> Optional[Dict]:
 
 
 def fetch_tencent_quotes(codes: List[str]) -> List[Dict]:
-    """从腾讯财经获取行情数据"""
+    """从腾讯财经获取行情数据（带缓存）"""
     if not codes:
         return []
     
+    # 生成缓存键
+    cache_key = ",".join(sorted(codes))
+    namespace = "tencent_quotes"
+    
+    # 确定缓存时间：检查是否有A股代码
+    has_a_share = any(code.startswith(('sh', 'sz')) for code in codes)
+    market_type = "A_share" if has_a_share else "other"
+    ttl = determine_ttl(market_type, "realtime")
+    
+    # 尝试从缓存获取
+    if is_cache_enabled():
+        cached_data = cache.get(namespace, cache_key)
+        if cached_data is not None:
+            return cached_data
+    
+    # 没有缓存或缓存禁用，实际获取
     code_str = ",".join(codes)
     url = f"{TENCENT_API_URL}{code_str}"
     
@@ -329,6 +362,10 @@ def fetch_tencent_quotes(codes: List[str]) -> List[Dict]:
                 if quote:
                     results.append(quote)
         
+        # 保存到缓存
+        if is_cache_enabled():
+            cache.set(namespace, cache_key, results, ttl)
+        
         return results
         
     except Exception as e:
@@ -337,10 +374,24 @@ def fetch_tencent_quotes(codes: List[str]) -> List[Dict]:
 
 
 def fetch_sina_quotes(codes: List[str]) -> List[Dict]:
-    """从新浪财经获取行情数据"""
+    """从新浪财经获取行情数据（带缓存）"""
     if not codes:
         return []
     
+    # 生成缓存键
+    cache_key = ",".join(sorted(codes))
+    namespace = "sina_quotes"
+    
+    # 新浪主要是中国期货，按other市场处理
+    ttl = determine_ttl("other", "realtime")
+    
+    # 尝试从缓存获取
+    if is_cache_enabled():
+        cached_data = cache.get(namespace, cache_key)
+        if cached_data is not None:
+            return cached_data
+    
+    # 没有缓存或缓存禁用，实际获取
     code_str = ",".join(codes)
     url = f"{SINA_API_URL}{code_str}"
     
@@ -368,6 +419,10 @@ def fetch_sina_quotes(codes: List[str]) -> List[Dict]:
                         quote = parse_sina_quote(line, original_code)
                         if quote:
                             results.append(quote)
+        
+        # 保存到缓存
+        if is_cache_enabled():
+            cache.set(namespace, cache_key, results, ttl)
         
         return results
         
@@ -575,7 +630,7 @@ def parse_tencent_kline(raw_text: str, code: str, period: str) -> List[Dict]:
 
 def fetch_tencent_kline(code: str, period: str = "daily", year: Optional[int] = None) -> List[Dict]:
     """
-    从腾讯财经获取K线数据
+    从腾讯财经获取K线数据（带缓存）
     
     Args:
         code: 股票代码，如 sz000001, sh600000
@@ -585,6 +640,19 @@ def fetch_tencent_kline(code: str, period: str = "daily", year: Optional[int] = 
     Returns:
         K线数据列表
     """
+    # 生成缓存键
+    cache_key = f"{code}_{period}_{year if year else 'latest'}"
+    namespace = "tencent_kline"
+    
+    # K线数据按正常数据缓存1小时
+    ttl = determine_ttl("any", "kline")
+    
+    # 尝试从缓存获取
+    if is_cache_enabled():
+        cached_data = cache.get(namespace, cache_key)
+        if cached_data is not None:
+            return cached_data
+    
     try:
         if period == "daily" and year is not None:
             # 指定年份的日K线
@@ -611,7 +679,13 @@ def fetch_tencent_kline(code: str, period: str = "daily", year: Optional[int] = 
         else:
             text = response.text
         
-        return parse_tencent_kline(text, code, period)
+        result = parse_tencent_kline(text, code, period)
+        
+        # 保存到缓存
+        if is_cache_enabled():
+            cache.set(namespace, cache_key, result, ttl)
+        
+        return result
         
     except Exception as e:
         print(f"腾讯K线请求失败: {e}")
@@ -660,7 +734,7 @@ def parse_sina_kline(data: List[Dict], code: str, scale: int) -> List[Dict]:
 
 def fetch_sina_kline(code: str, scale: int = 5, ma: int = 5, datalen: int = 1023) -> List[Dict]:
     """
-    从新浪财经获取K线数据
+    从新浪财经获取K线数据（带缓存）
     
     Args:
         code: 股票代码，如 sz000001, sh600000
@@ -671,6 +745,19 @@ def fetch_sina_kline(code: str, scale: int = 5, ma: int = 5, datalen: int = 1023
     Returns:
         K线数据列表
     """
+    # 生成缓存键
+    cache_key = f"{code}_{scale}min_ma{ma}_len{datalen}"
+    namespace = "sina_kline"
+    
+    # K线数据按正常数据缓存1小时
+    ttl = determine_ttl("any", "kline")
+    
+    # 尝试从缓存获取
+    if is_cache_enabled():
+        cached_data = cache.get(namespace, cache_key)
+        if cached_data is not None:
+            return cached_data
+    
     try:
         params = {
             "symbol": code,
@@ -685,7 +772,13 @@ def fetch_sina_kline(code: str, scale: int = 5, ma: int = 5, datalen: int = 1023
         if not isinstance(data, list):
             return []
         
-        return parse_sina_kline(data, code, scale)
+        result = parse_sina_kline(data, code, scale)
+        
+        # 保存到缓存
+        if is_cache_enabled():
+            cache.set(namespace, cache_key, result, ttl)
+        
+        return result
         
     except Exception as e:
         print(f"新浪K线请求失败: {e}")
@@ -750,7 +843,23 @@ def main():
     parser.add_argument("--detail", action="store_true", help="显示详细信息")
     parser.add_argument("--json", action="store_true", help="JSON格式输出")
     
+    # 缓存控制
+    parser.add_argument("--no-cache", action="store_true", help="禁用缓存（不使用缓存，也不保存到缓存）")
+    parser.add_argument("--clear-cache", action="store_true", help="清除所有缓存后退出")
+    
     args = parser.parse_args()
+    
+    # 处理清除缓存
+    if args.clear_cache:
+        print("正在清除缓存...")
+        cache.clear()
+        print("缓存已清除")
+        return
+    
+    # 如果禁用缓存，设置全局开关
+    if args.no_cache:
+        global CACHE_ENABLED
+        CACHE_ENABLED = False
     
     if args.kline:
         # K线查询模式
