@@ -46,7 +46,9 @@ supported_markets:
 | **资金流向** | 资金、资金流向 | westockdata |
 | **龙虎榜** | 龙虎榜、lhb | westockdata |
 | **期权数据** | 期权、option | yfinancedata / futuopendata |
-| **宏观经济** | 宏观、利率、货币供应量 | baostockdata |
+| **宏观经济** | 宏观、CPI、PPI、PMI、GDP、利率、货币供应量 | macrodata ⭐ | baostockdata |
+| **经济日历** | 经济日历、数据发布、事件 | macrodata（浏览器） | — |
+| **政策动态** | 政策、央行、监管 | macrodata（浏览器） | — |
 
 ### 示例查询
 
@@ -75,6 +77,7 @@ supported_markets:
 | **coingeckodata** | CoinGecko | 10,000+加密货币 | 免费无API Key |
 | **okxdata** | OKX交易所 | 加密货币 | OKX全量API、模拟盘 |
 | **binancedata** | 币安交易所 | 加密货币 | WebSocket推送 |
+| **macrodata** | 宏观数据 | 中国/美国/全球 | 爬虫采集 + AKShare 兜底 + 浏览器 |
 
 详细的路由规则和数据源对比，请查阅 [ROUNTING.md](file:///d:/src/trading-skills/quantdata/ROUNTING.md)
 

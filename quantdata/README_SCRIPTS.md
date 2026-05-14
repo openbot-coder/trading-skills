@@ -150,6 +150,36 @@ python quantdata/okxdata/scripts/okx.py ticker BTC-USDT ETH-USDT
 python quantdata/okxdata/scripts/okx.py kline BTC-USDT --bar 1d --limit 100
 ```
 
+### 6. MacroData - macrodata/scripts/macro.py (新增，宏观数据)
+
+```bash
+# 查看帮助
+python quantdata/macrodata/scripts/macro.py --help
+
+# 列出所有可用宏观指标
+python quantdata/macrodata/scripts/macro.py list
+
+# 查询中国宏观指标
+python quantdata/macrodata/scripts/macro.py query cn cpi
+python quantdata/macrodata/scripts/macro.py query cn ppi
+python quantdata/macrodata/scripts/macro.py query cn pmi
+python quantdata/macrodata/scripts/macro.py query cn gdp
+python quantdata/macrodata/scripts/macro.py query cn m2
+python quantdata/macrodata/scripts/macro.py query cn lpr
+
+# 查询美国宏观指标
+python quantdata/macrodata/scripts/macro.py query us nonfarm
+python quantdata/macrodata/scripts/macro.py query us cpi
+python quantdata/macrodata/scripts/macro.py query us unemployment
+python quantdata/macrodata/scripts/macro.py query us ism_pmi
+
+# 输出 JSON 格式
+python quantdata/macrodata/scripts/macro.py query cn cpi --json
+
+# 生成综合宏观报告
+python quantdata/macrodata/scripts/macro.py report
+```
+
 ### 5. Binance - binancedata/scripts/binance.py
 
 ```bash
@@ -210,6 +240,7 @@ python quantdata/binancedata/scripts/binance.py kline BTCUSDT --interval 1d --li
 | **baostockdata** | `baostock.py` | A股K线、财务数据、宏观经济 |
 | **okxdata** | `okx.py` | OKX 加密货币行情、K线 |
 | **binancedata** | `binance.py` | Binance 加密货币行情、K线 |
+| **macrodata** | `macro.py` | 宏观数据查询（中国/美国 CPI/PPI/PMI/GDP 等 30+ 指标） |
 
 ## 注意事项
 

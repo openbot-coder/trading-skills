@@ -56,9 +56,17 @@ trading-skills/
 │   ├── futuopendata/         # 富途 OpenAPI
 │   ├── coingeckodata/        # CoinGecko 加密货币
 │   ├── okxdata/              # OKX 交易所
-│   └── binancedata/          # Binance 交易所
+│   ├── binancedata/          # Binance 交易所
+│   └── macrodata/            # 宏观数据（新增）
 └── broker-manager/           # 券商管理中心
-    └── SKILL.md              # 交易管理技能文档
+├── broker-manager/           # 券商管理中心
+│   └── SKILL.md              # 交易管理技能文档
+└── macrodata/                # 宏观数据（新增）
+    ├── SKILL.md              # 宏观数据采集指南
+    ├── scripts/
+    │   ├── macro.py          # 爬虫查询脚本（东方财富/金十数据）
+    │   └── macro_monitor.py  # 浏览器采集脚本
+    └── references/           # 指标科普知识库
 ```
 
 ## 快速开始
@@ -146,6 +154,21 @@ python quantdata/coingeckodata/scripts/coingecko.py top --top 10
 
 **详细文档：** [broker-manager/SKILL.md](broker-manager/SKILL.md)
 
+### macrodata - 宏观数据采集
+
+宏观数据采集中心，覆盖中国/美国等主要经济体核心指标。
+
+**功能：**
+- 爬虫采集东方财富、金十数据等公开数据源
+- 支持 CPI/PPI/PMI/GDP/LPR/M2/非农/失业率等 30+ 项指标
+- AKShare 作为兜底数据源
+- 浏览器采集经济日历、政策动态
+- 自指标科普解释知识库
+
+**数据优先级：** 爬虫(requests) → AKShare(兜底) → 浏览器(最后手段)
+
+**详细文档：** [quantdata/macrodata/SKILL.md](quantdata/macrodata/SKILL.md)
+
 ### 子技能列表
 
 | 子技能 | 路径 | 市场 | 说明 |
@@ -157,6 +180,7 @@ python quantdata/coingeckodata/scripts/coingecko.py top --top 10
 | **coingeckodata** | [quantdata/coingeckodata/](quantdata/coingeckodata/) | 加密货币 | 免费加密货币API |
 | **okxdata** | [quantdata/okxdata/](quantdata/okxdata/) | 加密货币 | OKX交易所 |
 | **binancedata** | [quantdata/binancedata/](quantdata/binancedata/) | 加密货币 | Binance交易所 |
+| **macrodata** | [quantdata/macrodata/](quantdata/macrodata/) | 中国/美国/全球宏观 | 爬虫采集 + AKShare + 浏览器 |
 
 ## 贡献指南
 
