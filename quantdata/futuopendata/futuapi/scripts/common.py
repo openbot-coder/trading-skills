@@ -4,17 +4,45 @@
 
 包含：
 - 环境变量配置
-- 依赖检查与自动安装
 - OpenD 连接配置
 - 交易环境/市场枚举转换
 - 上下文管理辅助
 """
 import os
-import subprocess
+import socket
+import logging
 import sys
 import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+class FutuAPIError(Exception):
+    """Futu API 基础异常"""
+    pass
+
+
+class ConnectionError(FutuAPIError):
+    """连接 OpenD 失败"""
+    pass
+
+
+class PermissionError(FutuAPIError):
+    """权限不足异常"""
+    def __init__(self, message: str, market: str = "", authority_url: str = ""):
+        super().__init__(message)
+        self.market = market
+        self.authority_url = authority_url
+
+
+class APIResponseError(FutuAPIError):
+    """API 响应错误"""
+    def __init__(self, action: str, message: str):
+        super().__init__(f"{action}失败: {message}")
+        self.action = action
+        self.message = message
 
 
 # ============================================================
@@ -24,15 +52,10 @@ from typing import Optional
 @dataclass
 class FutuConfig:
     """Futu OpenAPI 配置类"""
-    # 登录凭证
     login_account: Optional[str] = None
     login_pwd: Optional[str] = None
-
-    # OpenD 连接配置
     opend_host: str = "127.0.0.1"
     opend_port: int = 11111
-
-    # 交易配置
     trd_env: str = "SIMULATE"
     default_market: str = "NONE"
     security_firm: Optional[str] = None
@@ -43,17 +66,6 @@ def get_config() -> FutuConfig:
     获取 Futu OpenAPI 配置
 
     从环境变量中读取配置，未设置的使用默认值。
-
-    环境变量:
-        - FUTU_LOGIN_ACCOUNT: Futu 登录账号
-        - FUTU_LOGIN_PWD: Futu 登录密码
-        - FUTU_OPEND_HOST: OpenD 主机地址 (默认: 127.0.0.1)
-        - FUTU_OPEND_PORT: OpenD 端口 (默认: 11111)
-        - FUTU_TRD_ENV: 交易环境 (默认: SIMULATE)
-        - FUTU_DEFAULT_MARKET: 默认市场 (默认: US)
-
-    Returns:
-        FutuConfig: 配置对象
     """
     return FutuConfig(
         login_account=os.getenv("FUTU_LOGIN_ACCOUNT", ""),
@@ -66,111 +78,68 @@ def get_config() -> FutuConfig:
     )
 
 
-def _ensure_utf8_io():
-    """Windows 下切换 stdout/stderr 为 UTF-8，避免 GBK 编码错误"""
+def ensure_utf8_io():
+    """Windows 下切换 stdout/stderr 为 UTF-8，可在入口脚本开头调用"""
     if sys.platform != "win32":
         return
     try:
         sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"无法配置 stdout UTF-8: {e}")
     try:
         sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
-
-
-_ensure_utf8_io()
-
-
-# ============================================================
-# 依赖检查
-# ============================================================
-
-SDK_MODULE_NAME = "futu"  # 固定品牌模块名
-
-
-def ensure_futu_api():
-    """确保 futu-api 已安装，未安装则自动安装"""
-    try:
-        import futu
-        return True
-    except ImportError:
-        pass
-    print("正在安装 futu-api...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "futu-api"])
-    return True
-
-ensure_futu_api()
-
-from futu import (
-        OpenQuoteContext,
-        OpenSecTradeContext,
-        RET_OK,
-        TrdEnv,
-        TrdMarket,
-        TrdSide,
-        OrderType,
-        ModifyOrderOp,
-        SubType,
-        KLType,
-        AuType,
-        Market,
-        SecurityType,
-        SecurityReferenceType,
-        SimpleFilter,
-        AccumulateFilter,
-        FinancialFilter,
-        FinancialQuarter,
-        StockField,
-        SortDir,
-        Plate,
-)
-
-try:
-    from futu import TradeDateMarket
-except ImportError:
-    TradeDateMarket = None
-
-from futu import SecurityFirm
+    except Exception as e:
+        logger.debug(f"无法配置 stderr UTF-8: {e}")
 
 
 # ============================================================
 # 连接配置
 # ============================================================
 
-def get_opend_config():
-    """获取 OpenD 连接配置 -> (host, port)"""
+def get_opend_config() -> Tuple[str, int]:
+    """获取 OpenD 连接配置"""
     config = get_config()
     return config.opend_host, config.opend_port
 
 
-def _check_opend_alive(host, port):
-    """快速检测 OpenD 端口是否可连接，不可连接时直接报错退出"""
-    import socket
+def check_opend_alive(host: str, port: int) -> bool:
+    """
+    检测 OpenD 端口是否可连接
+
+    Returns:
+        True if connection successful
+
+    Raises:
+        ConnectionError: 无法连接时抛出
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(2)
     try:
         sock.connect((host, port))
+        return True
     except ConnectionRefusedError:
-        print(f"错误: 无法连接 OpenD ({host}:{port})，连接被拒绝。请先启动 OpenD 客户端。")
-        sys.exit(1)
+        raise ConnectionError(
+            f"无法连接 OpenD ({host}:{port})，连接被拒绝。请先启动 OpenD 客户端。"
+        )
     except OSError as e:
-        print(f"错误: 无法连接 OpenD ({host}:{port}): {e}。请检查 OpenD 是否已启动。")
-        sys.exit(1)
+        raise ConnectionError(
+            f"无法连接 OpenD ({host}:{port}): {e}。请检查 OpenD 是否已启动。"
+        )
     finally:
         sock.close()
 
 
 def create_quote_context():
     """创建行情上下文"""
+    from futu import OpenQuoteContext
     host, port = get_opend_config()
-    _check_opend_alive(host, port)
+    check_opend_alive(host, port)
     return OpenQuoteContext(host=host, port=port)
 
 
 def parse_security_firm(firm_str):
     """解析券商标识字符串 -> SecurityFirm 枚举，无效时返回 None"""
+    from futu import SecurityFirm
     if not firm_str:
         return None
     key = str(firm_str).strip().upper()
@@ -187,8 +156,9 @@ def get_default_security_firm():
 
 def create_trade_context(market=None, security_firm=None):
     """创建交易上下文"""
+    from futu import OpenSecTradeContext
     host, port = get_opend_config()
-    _check_opend_alive(host, port)
+    check_opend_alive(host, port)
     trd_market = parse_market(market) if market else get_default_market()
     kwargs = dict(host=host, port=port, filter_trdmarket=trd_market)
     if security_firm is not None:
@@ -206,6 +176,7 @@ def create_trade_context(market=None, security_firm=None):
 
 def parse_trd_env(env_str):
     """解析交易环境字符串 -> TrdEnv"""
+    from futu import TrdEnv
     if env_str and str(env_str).upper() == "REAL":
         return TrdEnv.REAL
     return TrdEnv.SIMULATE
@@ -213,6 +184,7 @@ def parse_trd_env(env_str):
 
 def parse_market(market_str):
     """解析交易市场字符串 -> TrdMarket"""
+    from futu import TrdMarket
     if not market_str:
         return TrdMarket.US
     mapping = {
@@ -227,7 +199,6 @@ def parse_market(market_str):
     return mapping.get(str(market_str).upper(), TrdMarket.US)
 
 
-# 股票代码前缀 -> 交易市场映射
 _CODE_PREFIX_TO_MARKET = {
     "US": "US",
     "HK": "HK",
@@ -238,8 +209,7 @@ _CODE_PREFIX_TO_MARKET = {
 
 
 def infer_market_from_code(code):
-    """从股票代码前缀推导交易市场字符串，如 US.AAPL -> 'US'，HK.00700 -> 'HK'。
-    无法识别时返回 None。"""
+    """从股票代码前缀推导交易市场字符串"""
     if not code or "." not in code:
         return None
     prefix = code.split(".")[0].upper()
@@ -248,6 +218,7 @@ def infer_market_from_code(code):
 
 def parse_trd_side(side_str):
     """解析交易方向字符串 -> TrdSide"""
+    from futu import TrdSide
     if not side_str or str(side_str).strip().upper() not in ("BUY", "SELL"):
         raise ValueError(f"无效的交易方向: {side_str}，必须为 BUY 或 SELL")
     if str(side_str).strip().upper() == "BUY":
@@ -257,6 +228,7 @@ def parse_trd_side(side_str):
 
 def parse_subtypes(subtype_names):
     """将字符串列表转换为 SubType 枚举列表"""
+    from futu import SubType
     subtypes = []
     for name in subtype_names:
         key = str(name).strip().upper()
@@ -289,7 +261,6 @@ def get_default_market():
     return parse_market(config.default_market)
 
 
-
 # ============================================================
 # 数据处理辅助
 # ============================================================
@@ -304,7 +275,7 @@ def safe_get(row, *keys, default=""):
 
 
 def safe_float(val, default=0.0):
-    """安全转换为 float，遇到 N/A、空串、None 等非数值时返回默认值"""
+    """安全转换为 float"""
     if val is None:
         return default
     try:
@@ -314,11 +285,9 @@ def safe_float(val, default=0.0):
 
 
 def safe_int(val, default=0):
-    """安全转换为 int，遇到 N/A、空串、None 等非数值时返回默认值。
-    处理 numpy 标量类型，避免大整数（如 18 位 acc_id）经 float64 转换后精度丢失。"""
+    """安全转换为 int，处理 numpy 标量类型"""
     if val is None:
         return default
-    # numpy 标量: 提取原生 Python 类型，避免 float64 精度丢失
     if hasattr(val, 'item'):
         val = val.item()
     try:
@@ -375,7 +344,7 @@ _AUTHORITY_URLS = {"futu": "https://openapi.futunn.com/futu-api-doc/intro/author
 
 
 def _detect_market_from_argv():
-    """从命令行参数中的股票代码检测市场（如 HK.00700 -> 港股）"""
+    """从命令行参数中的股票代码检测市场"""
     import re
     for arg in sys.argv[1:]:
         m = re.match(r'^(HK|US|SH|SZ|SG)\.', arg, re.IGNORECASE)
@@ -389,7 +358,6 @@ def _get_authority_url():
     return _AUTHORITY_URLS["futu"]
 
 
-
 def _build_permission_hint():
     """构建行情权限不足的提示信息"""
     market = _detect_market_from_argv()
@@ -401,7 +369,6 @@ def _build_permission_hint():
     )
 
 
-
 def _build_permission_hint_json():
     """构建 JSON 格式的行情权限提示字段"""
     market = _detect_market_from_argv()
@@ -411,9 +378,16 @@ def _build_permission_hint_json():
     return {"hint": hint, "authority_url": url}
 
 
-
 def check_ret(ret, data, ctx=None, action="操作", output_json=None):
-    """检查 API 返回值，失败则打印错误并退出"""
+    """
+    检查 API 返回值，失败则抛出异常
+
+    Raises:
+        PermissionError: 权限不足时抛出
+        APIResponseError: 其他响应错误时抛出
+    """
+    from futu import RET_OK
+
     if ret != RET_OK:
         if output_json is None:
             try:
@@ -432,8 +406,17 @@ def check_ret(ret, data, ctx=None, action="操作", output_json=None):
             print(f"{action}失败: {data}")
             if perm_error:
                 print(_build_permission_hint())
+
         safe_close(ctx)
-        sys.exit(1)
+
+        if perm_error:
+            market = _detect_market_from_argv()
+            raise PermissionError(
+                str(data),
+                market=market,
+                authority_url=_get_authority_url()
+            )
+        raise APIResponseError(action, str(data))
 
 
 def is_empty(data):
@@ -483,3 +466,11 @@ def df_to_records(df, limit=None):
             for k in keys
         })
     return records
+
+
+def setup_logging(level=logging.INFO):
+    """配置日志，可在入口脚本中调用"""
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )

@@ -318,12 +318,26 @@ def query_with_retry(ticker, max_retries=3):
 
 | 数据类型 | 详细描述 | 路由目标 | 说明 |
 |---------|---------|---------|------|
-| **存款利率** | 人民币存款基准利率 | `baostockdata` | 仅baostockdata |
-| **贷款利率** | 人民币贷款基准利率 | `baostockdata` | 仅baostockdata |
-| **存款准备金率** | 存款准备金率 | `baostockdata` | 仅baostockdata |
-| **货币供应量** | M0/M1/M2 | `baostockdata` | 仅baostockdata |
-| **GDP数据** | 国内生产总值 | 扩展 | 待支持 |
-| **CPI/PPI** | 通胀数据 | 扩展 | 待支持 |
+| **CPI** | 消费者物价指数（同比/环比） | `macrodata ⭐` → `baostockdata` | macrodata 爬虫优先（东方财富） |
+| **PPI** | 生产者物价指数 | `macrodata ⭐` → `baostockdata` | macrodata 爬虫优先 |
+| **PMI** | 采购经理指数（制造业/非制造业） | `macrodata ⭐` | 东方财富/金十数据 |
+| **GDP** | 国内生产总值（季度） | `macrodata ⭐` | 东方财富 |
+| **LPR** | 贷款市场报价利率 | `macrodata ⭐` | 东方财富 |
+| **M2/货币供应量** | M0/M1/M2 同比 | `macrodata ⭐` → `baostockdata` | macrodata 优先 |
+| **社会融资规模** | 社融增量 | `macrodata ⭐` | 东方财富 |
+| **工业增加值** | 规模以上工业增加值 | `macrodata ⭐` | 东方财富 |
+| **外汇储备** | 国家外汇储备 | `macrodata ⭐` | 东方财富 |
+| **进出口** | 海关进出口数据 | `macrodata ⭐` | 东方财富 |
+| **存款利率** | 人民币存款基准利率 | `macrodata` → `baostockdata` | 双源 |
+| **贷款利率** | 人民币贷款基准利率 | `macrodata` → `baostockdata` | 双源 |
+| **存款准备金率** | 存款准备金率 | `macrodata` → `baostockdata` | 双源 |
+| **美国非农** | 非农就业人数变化 | `macrodata ⭐` | 金十数据 |
+| **美国CPI/PPI** | 美国通胀数据 | `macrodata ⭐` | 金十数据 |
+| **美国失业率** | 美国失业率 | `macrodata ⭐` | 金十数据 |
+| **美国ADP** | ADP就业人数 | `macrodata ⭐` | 金十数据 |
+| **ISM PMI** | ISM制造业PMI | `macrodata ⭐` | 金十数据 |
+| **经济日历** | 数据发布时间表 | `macrodata`（浏览器） | Trading Economics / FRED |
+| **政策动态** | 央行/监管政策 | `macrodata`（浏览器） | 央行官网 / 财联社 |
 
 ---
 
@@ -557,6 +571,17 @@ skills:
     priority: 8
     markets: [us, hk, global]
     data_types: [quote, kline, minute, financial, options, analyst]
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      initial_delay: 1s
+
+  macrodata:
+    path: macrodata
+    enabled: true
+    priority: 6
+    markets: [china_macro, us_macro, global_macro]
+    data_types: [macro, economic_calendar, policy]
     retry:
       max_attempts: 3
       backoff: exponential
