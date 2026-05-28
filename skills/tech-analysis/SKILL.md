@@ -12,19 +12,25 @@ license: MIT
 ## 使用方法
 
 ```bash
-# 全引擎分析（默认）
-python3 scripts/ta_report.py BTC/USDT -e binance -t 1d
+# === 推荐: 本地 CSV 分析 (离线可用) ===
 
-# A股分析
-python3 scripts/ta_report.py 000001 -e akshare
+# 1) 先下载 CSV (以 CCXT 加密货币为例)
+cd quantdata/ccxtdata/scripts && python3 ccxt_data.py kline BTC/USDT -e okx -t 1d -l 200 > btc.csv
+cd quantdata/baostockdata/scripts && python3 baostock.py kline sz.002050 --start 2025-01-01 > 002050.csv
 
-# 美股分析
-python3 scripts/ta_report.py AAPL -e yfinance
+# 2) 再分析
+python3 scripts/ta_report.py --csv btc.csv BTC/USDT
+python3 scripts/ta_report.py --csv 002050.csv 002050
 
-# 指定引擎
-python3 scripts/ta_report.py BTC/USDT --engines candlestick smc technical-basic
+# === 在线获取 (需网络+代理) ===
+python3 scripts/ta_report.py BTC/USDT -e binance -t 1d -p http://127.0.0.1:7890
+python3 scripts/ta_report.py 000001 -e akshare -p http://127.0.0.1:7890
+python3 scripts/ta_report.py AAPL -e yfinance -p http://127.0.0.1:7890
 
-# 列出所有引擎
+# === 指定引擎 ===
+python3 scripts/ta_report.py --csv btc.csv BTC/USDT --engines candlestick smc technical-basic
+
+# === 列出所有引擎 ===
 python3 scripts/ta_report.py --list-engines
 ```
 
@@ -33,11 +39,29 @@ python3 scripts/ta_report.py --list-engines
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | symbol | 标的代码 | 必填 |
+| --csv, -c | 本地 CSV 文件路径 | - |
 | --exchange, -e | 交易所 | binance |
 | --timeframe, -t | K线周期 | 1d |
 | --limit, -n | K线数量 | 200 |
 | --engines | 指定引擎 | 全部 |
 | --list-engines | 列出引擎 | - |
+| --proxy, -p | HTTP(S)代理 | - |
+
+## CSV 数据准备
+
+推荐工作流：用 quantdata 工具下载 CSV，再离线分析。
+
+| 数据类型 | 下载工具 | 命令示例 |
+|---------|---------|---------|
+| 加密货币 | ccxtdata | `ccxt_data.py kline BTC/USDT -e okx -t 1d -l 200 > btc.csv` |
+| A股 | baostockdata | `baostock.py kline sz.002050 --start 2025-01-01 > 002050.csv` |
+| 美股 | yfinancedata | `get_kline.py AAPL --period 1y --interval 1d > aapl.csv` |
+| A股(实时) | aksharedata | `akshare.py stock_zh_a_hist 002050 --period daily > 002050.csv` |
+
+CSV 自动识别列名 (中英文均支持):
+- 英文: `date/time/timestamp, open, high, low, close, volume`
+- 中文: `日期/时间, 开盘/开盘价, 最高/最高价, 最低/最低价, 收盘/收盘价, 成交量`
+- 编码: UTF-8 / GBK / GB2312 自动检测
 
 ## 引擎列表
 

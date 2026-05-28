@@ -4,6 +4,16 @@
 整合 7 大技术分析引擎，对指定标的生成综合技术面报告。
 支持加密货币、A股、美股、期货等多市场。
 
+数据来源:
+  --csv FILE         从本地 CSV 文件加载 (推荐，离线可用)
+  --exchange ccxt    通过 ccxt 在线获取 (加密货币)
+  --exchange akshare 通过 akshare 在线获取 (A股)
+  --exchange yfinance 通过 yfinance 在线获取 (美股)
+
+CSV 数据准备 (以 CCXT 为例):
+  python ccxt_data.py kline BTC/USDT -e okx -t 1d -l 200 > btc_usdt.csv
+  python ta_report.py --csv btc_usdt.csv BTC/USDT
+
 引擎列表:
 1. K线形态 (candlestick)  — 15 种经典蜡烛图形态
 2. 缠论 (chanlun)         — 分型→笔→中枢→买卖点
@@ -150,6 +160,95 @@ def format_report(symbol: str, exchange: str, timeframe: str,
 
 # ── 数据获取 ──
 
+# CSV 列名映射：支持多种常见格式自动识别
+CSV_COLUMN_MAP = {
+    # 英文标准
+    "date": "timestamp", "time": "timestamp", "datetime": "timestamp",
+    "open": "open", "high": "high", "low": "low", "close": "close",
+    "vol": "volume", "volume": "volume",
+    # 中文 (Baostock / akshare / 东方财富 常见列名)
+    "日期": "timestamp", "时间": "timestamp", "date": "timestamp",
+    "开盘": "open", "开盘价": "open", "开盘价格": "open",
+    "最高": "high", "最高价": "high", "最高价格": "high",
+    "最低": "low", "最低价": "low", "最低价格": "low",
+    "收盘": "close", "收盘价": "close", "收盘价格": "close",
+    "成交量": "volume", "成交额": "amount",
+    "昨收": "preclose", "昨收价": "preclose", "昨结": "preclose",
+    "涨跌额": "change", "涨跌幅": "pct_chg",
+    "换手率": "turnover",
+    # ccxt_data.py 输出格式
+    "timestamp,open,high,low,close,volume": None,  # 已是标准格式，跳过
+}
+
+
+def load_csv(filepath: str) -> pd.DataFrame:
+    """从本地 CSV 文件加载 OHLCV 数据。
+
+    自动识别:
+      - 有/无表头
+      - 英文/中文列名
+      - ccxt_data.py / baostock.py / akshare 输出格式
+      - 日期索引或普通列
+    """
+    if not os.path.isfile(filepath):
+        raise FileNotFoundError(f"CSV 文件不存在: {filepath}")
+
+    # 尝试多种编码
+    for enc in ("utf-8", "utf-8-sig", "gbk", "gb2312", "latin-1"):
+        try:
+            df = pd.read_csv(filepath, encoding=enc, nrows=5)
+            break
+        except (UnicodeDecodeError, pd.errors.ParserError):
+            continue
+    else:
+        raise ValueError(f"无法解码 CSV 文件: {filepath}")
+
+    # 重新读取全部数据
+    df = pd.read_csv(filepath, encoding=enc)
+
+    # 标准化列名
+    col_map = {}
+    for col in df.columns:
+        normalized = col.strip().lower()
+        if normalized in CSV_COLUMN_MAP and CSV_COLUMN_MAP[normalized] is not None:
+            col_map[col] = CSV_COLUMN_MAP[normalized]
+    df.rename(columns=col_map, inplace=True)
+
+    # 如果没有 timestamp 列，尝试用第一列
+    if "timestamp" not in df.columns:
+        first_col = df.columns[0]
+        # 尝试解析为日期
+        try:
+            pd.to_datetime(df[first_col].head(3))
+            df.rename(columns={first_col: "timestamp"}, inplace=True)
+        except (ValueError, TypeError):
+            pass
+
+    # 设置索引
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        df.dropna(subset=["timestamp"], inplace=True)
+        df.set_index("timestamp", inplace=True)
+        df.sort_index(inplace=True)
+
+    # 确保有必要列
+    required = ["open", "high", "low", "close"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"CSV 缺少必要列: {missing}。现有列: {list(df.columns)}")
+
+    # volume 可选
+    if "volume" not in df.columns:
+        df["volume"] = 0.0
+
+    # 清洗数值
+    for col in ["open", "high", "low", "close", "volume"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df.dropna(subset=["open", "high", "low", "close"], inplace=True)
+
+    return df[["open", "high", "low", "close", "volume"]]
+
+
 def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
                limit: int = 200, proxy: str = None) -> pd.DataFrame:
     """获取 OHLCV 数据"""
@@ -226,8 +325,31 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
 # ── CLI ──
 
 def main():
-    parser = argparse.ArgumentParser(description="技术分析综合报告")
-    parser.add_argument("symbol", nargs="?", help="标的代码，如 BTC/USDT, 000001, AAPL")
+    parser = argparse.ArgumentParser(
+        description="技术分析综合报告",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+数据来源示例:
+  # 从本地 CSV 分析 (推荐，离线可用)
+  %(prog)s --csv data.csv BTC/USDT
+  %(prog)s --csv 002050.csv 002050
+
+  # 先下载 CSV 再分析 (CCXT 加密货币)
+  ccxt_data.py kline BTC/USDT -e okx -t 1d -l 200 > btc.csv
+  %(prog)s --csv btc.csv BTC/USDT
+
+  # 先下载 CSV 再分析 (Baostock A股)
+  baostock.py kline sz.002050 --start 2025-01-01 > 002050.csv
+  %(prog)s --csv 002050.csv 002050
+
+  # 在线获取 (需网络)
+  %(prog)s BTC/USDT -e okx
+  %(prog)s 002050 -e akshare
+  %(prog)s AAPL -e yfinance
+        """)
+    parser.add_argument("symbol", nargs="?", help="标的代码，如 BTC/USDT, 002050, AAPL")
+    parser.add_argument("--csv", "-c", metavar="FILE",
+                        help="从本地 CSV 文件加载数据 (支持中英文列名自动识别)")
     parser.add_argument("--exchange", "-e", default="binance",
                         help="交易所: binance/okx/bybit/akshare/yfinance (默认 binance)")
     parser.add_argument("--timeframe", "-t", default="1d",
@@ -258,9 +380,15 @@ def main():
         print("❌ 无可用引擎", file=sys.stderr)
         sys.exit(1)
 
-    print(f"⏳ 获取 {args.symbol} 数据 ({args.exchange}, {args.timeframe})...")
-    df = fetch_data(args.symbol, args.exchange, args.timeframe, args.limit, proxy=args.proxy)
-    print(f"✅ 获取 {len(df)} 根K线")
+    # 数据获取：优先 CSV，否则在线获取
+    if args.csv:
+        print(f"📂 从 CSV 加载: {args.csv}")
+        df = load_csv(args.csv)
+        print(f"✅ 加载 {len(df)} 根K线 | {df.index[0]} ~ {df.index[-1]}")
+    else:
+        print(f"⏳ 获取 {args.symbol} 数据 ({args.exchange}, {args.timeframe})...")
+        df = fetch_data(args.symbol, args.exchange, args.timeframe, args.limit, proxy=args.proxy)
+        print(f"✅ 获取 {len(df)} 根K线")
 
     data_map = {args.symbol: df}
     print(f"⏳ 运行 {len(engines)} 个引擎...")
