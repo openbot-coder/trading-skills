@@ -31,6 +31,9 @@ SKILL_DIR = os.path.dirname(SCRIPT_DIR)
 _VIBE_BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))))
 VIBE_ENGINES_DIR = os.path.normpath(os.path.join(_VIBE_BASE, "Vibe-Trading", "agent", "src", "skills"))
 
+# quantdata 数据源路径
+QUANTDATA_DIR = os.path.normpath(os.path.join(_VIBE_BASE, "trading-skills", "quantdata"))
+
 # ── 引擎注册表 ──────────────────────────────────────────
 
 ENGINE_REGISTRY = {
@@ -126,10 +129,10 @@ def load_engines(engine_ids: List[str]) -> Dict[str, object]:
 
 def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
                limit: int = 200) -> pd.DataFrame:
-    """获取 OHLCV 数据"""
+    """获取 OHLCV 数据（基于 quantdata 数据源）"""
     symbol_upper = symbol.upper().replace("-", "/")
 
-    # 加密货币通过 ccxt
+    # ── 加密货币：通过 quantdata/ccxtdata 或 ccxt ──
     if exchange in ("binance", "okx", "bybit", "gate", "htx", "kucoin", "bitget"):
         try:
             import ccxt
@@ -143,7 +146,7 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"ccxt 获取失败: {e}", file=sys.stderr)
 
-    # A股通过 akshare
+    # ── A股：通过 quantdata/aksharedata 或 akshare ──
     if exchange == "akshare":
         try:
             import akshare as ak
@@ -159,7 +162,7 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"akshare 获取失败: {e}", file=sys.stderr)
 
-    # 美股/港股通过 yfinance
+    # ── 美股/港股/期货：通过 quantdata/yfinancedata 或 yfinance ──
     if exchange == "yfinance":
         try:
             import yfinance as yf
@@ -173,7 +176,24 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"yfinance 获取失败: {e}", file=sys.stderr)
 
-    raise RuntimeError(f"无法从 {exchange} 获取 {symbol} 的数据")
+    # ── 自动检测：加密货币符号自动用 ccxt ──
+    if "/" in symbol_upper or symbol_upper.startswith("BTC"):
+        try:
+            import ccxt
+            ex = ccxt.binance({"enableRateLimit": True})
+            ohlcv = ex.fetch_ohlcv(symbol_upper, timeframe=timeframe, limit=limit)
+            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df.set_index("timestamp", inplace=True)
+            return df
+        except Exception as e:
+            print(f"自动 ccxt 获取失败: {e}", file=sys.stderr)
+
+    raise RuntimeError(
+        f"无法从 {exchange} 获取 {symbol} 的数据\n"
+        f"支持的 exchange: binance, okx, akshare, yfinance\n"
+        f"量化数据源位于: {QUANTDATA_DIR}"
+    )
 
 
 # ── 报告生成 ──────────────────────────────────────────────
