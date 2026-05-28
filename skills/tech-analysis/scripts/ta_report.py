@@ -1,143 +1,169 @@
 #!/usr/bin/env python3
-"""
-综合技术分析报告生成器
-整合 7 大技术分析体系，一键生成多维度技术面报告。
+"""技术分析综合报告生成器。
 
-用法:
-    python3 ta_report.py BTC/USDT
-    python3 ta_report.py BTC/USDT --exchange okx --timeframe 4h
-    python3 ta_report.py 000001.SZ --exchange akshare
-    python3 ta_report.py BTC/USDT --engines candlestick,technical-basic,ichimoku
+整合 7 大技术分析引擎，对指定标的生成综合技术面报告。
+支持加密货币、A股、美股、期货等多市场。
+
+引擎列表:
+1. K线形态 (candlestick)  — 15 种经典蜡烛图形态
+2. 缠论 (chanlun)         — 分型→笔→中枢→买卖点
+3. 艾略特波浪 (elliott-wave) — 5 浪推动 + 3 浪调整
+4. 谐波形态 (harmonic)     — Gartley/Bat/Butterfly/Crab XABCD 五点形态
+5. 一目均衡 (ichimoku)     — 五线系统 + 云带过滤
+6. SMC/ICT (smc)          — BOS/ChoCH 结构突破 + FVG 缺口
+7. 基础指标 (technical-basic) — EMA/RSI/BB/ADX/OBV 投票
+
+信号约定: 1=做多, -1=做空, 0=观望
 """
 
-import sys
-import os
 import argparse
-import importlib
-import importlib.util
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+import os
+import sys
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-# ── 路径设置 ──────────────────────────────────────────────
-
+# 本地引擎目录（engines/ 与 scripts/ 同级）
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SKILL_DIR = os.path.dirname(SCRIPT_DIR)
+ENGINES_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "engines")
+sys.path.insert(0, ENGINES_DIR)
 
-# Vibe-Trading 引擎路径
-# scripts → tech-analysis → skills → trading-skills → projects → Vibe-Trading
-_VIBE_BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))))
-VIBE_ENGINES_DIR = os.path.normpath(os.path.join(_VIBE_BASE, "Vibe-Trading", "agent", "src", "skills"))
+ENGINE_NAMES = [
+    "candlestick", "chanlun", "elliott_wave", "harmonic",
+    "ichimoku", "smc", "technical_basic",
+]
 
-# quantdata 数据源路径
-QUANTDATA_DIR = os.path.normpath(os.path.join(_VIBE_BASE, "trading-skills", "quantdata"))
-
-# ── 引擎注册表 ──────────────────────────────────────────
-
-ENGINE_REGISTRY = {
-    "candlestick": {
-        "name": "K线形态",
-        "path": "candlestick",
-        "weight": 1,
-        "required": False,
-    },
-    "chanlun": {
-        "name": "缠论",
-        "path": "chanlun",
-        "weight": 1.5,
-        "required": False,
-        "deps": ["czsc"],
-    },
-    "elliott-wave": {
-        "name": "艾略特波浪",
-        "path": "elliott-wave",
-        "weight": 1,
-        "required": False,
-    },
-    "harmonic": {
-        "name": "谐波形态",
-        "path": "harmonic",
-        "weight": 1,
-        "required": False,
-    },
-    "ichimoku": {
-        "name": "一目均衡",
-        "path": "ichimoku",
-        "weight": 1,
-        "required": False,
-    },
-    "smc": {
-        "name": "SMC/ICT",
-        "path": "smc",
-        "weight": 1,
-        "required": False,
-        "deps": ["smartmoneyconcepts"],
-    },
-    "technical-basic": {
-        "name": "基础指标",
-        "path": "technical-basic",
-        "weight": 1,
-        "required": False,
-    },
+ENGINE_DESCRIPTIONS = {
+    "candlestick": "K线形态",
+    "chanlun": "缠论",
+    "elliott_wave": "艾略特波浪",
+    "harmonic": "谐波形态",
+    "ichimoku": "一目均衡",
+    "smc": "SMC/ICT",
+    "technical_basic": "基础指标",
 }
 
-# ── 引擎加载 ──────────────────────────────────────────────
 
-def _load_engine(engine_id: str):
-    """动态加载 Vibe-Trading 引擎"""
-    info = ENGINE_REGISTRY[engine_id]
+def load_engines(names: Optional[List[str]] = None) -> Dict[str, object]:
+    """动态加载信号引擎"""
+    if names is None:
+        names = ENGINE_NAMES
 
-    # 检查依赖
-    for dep in info.get("deps", []):
-        try:
-            importlib.import_module(dep)
-        except ImportError:
-            print(f"  ⚠️  跳过 {info['name']}（缺少依赖: {dep}）", file=sys.stderr)
-            return None
-
-    # 加载引擎模块
-    engine_path = os.path.join(VIBE_ENGINES_DIR, info["path"], "example_signal_engine.py")
-    if not os.path.exists(engine_path):
-        print(f"  ⚠️  跳过 {info['name']}（引擎文件不存在: {engine_path}）", file=sys.stderr)
-        return None
-
-    try:
-        spec = importlib.util.spec_from_file_location(
-            f"engine_{engine_id}", engine_path
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod.SignalEngine()
-    except Exception as e:
-        print(f"  ⚠️  跳过 {info['name']}（加载失败: {e}）", file=sys.stderr)
-        return None
-
-
-def load_engines(engine_ids: List[str]) -> Dict[str, object]:
-    """批量加载引擎"""
     engines = {}
-    for eid in engine_ids:
-        engine = _load_engine(eid)
-        if engine is not None:
-            engines[eid] = engine
+    for name in names:
+        try:
+            mod = __import__(name)
+            engines[name] = mod.SignalEngine()
+        except Exception as e:
+            print(f"⚠ 加载引擎 {name} 失败: {e}", file=sys.stderr)
     return engines
 
 
-# ── 数据获取 ──────────────────────────────────────────────
+def run_engines(engines: Dict[str, object], data_map: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, pd.Series]]:
+    """对每个标的运行所有引擎"""
+    results = {}
+    for engine_name, engine in engines.items():
+        try:
+            signals = engine.generate(data_map)
+            results[engine_name] = signals
+        except Exception as e:
+            print(f"⚠ 引擎 {engine_name} 运行失败: {e}", file=sys.stderr)
+    return results
+
+
+def compute_key_levels(df: pd.DataFrame) -> dict:
+    """计算关键价位"""
+    c = df["close"]
+    return {
+        "price": float(c.iloc[-1]),
+        "high_7d": float(df["high"].tail(7).max()),
+        "low_7d": float(df["low"].tail(7).min()),
+        "high_30d": float(df["high"].tail(30).max()),
+        "low_30d": float(df["low"].tail(30).min()),
+        "pct_chg_7d": float((c.iloc[-1] / c.iloc[-8] - 1) * 100) if len(c) > 7 else 0,
+        "pct_chg_30d": float((c.iloc[-1] / c.iloc[-31] - 1) * 100) if len(c) > 30 else 0,
+    }
+
+
+def aggregate_signal(results: Dict[str, Dict[str, pd.Series]],
+                     symbol: str) -> tuple:
+    """聚合所有引擎的最新信号"""
+    votes = []
+    details = []
+    for engine_name, signals in results.items():
+        if symbol in signals:
+            sig = signals[symbol].iloc[-1]
+            votes.append(int(sig))
+            label = "做多 🟢" if sig == 1 else ("做空 🔴" if sig == -1 else "观望 ⚪")
+            details.append((ENGINE_DESCRIPTIONS.get(engine_name, engine_name), label, sig))
+
+    if not votes:
+        return 0, []
+
+    score = sum(votes)
+    final = 1 if score > 0 else (-1 if score < 0 else 0)
+    return final, details
+
+
+def format_report(symbol: str, exchange: str, timeframe: str,
+                  results: Dict[str, Dict[str, pd.Series]],
+                  levels: dict) -> str:
+    """格式化分析报告"""
+    price = levels["price"]
+    chg7 = levels["pct_chg_7d"]
+    chg30 = levels["pct_chg_30d"]
+
+    final, details = aggregate_signal(results, symbol)
+
+    lines = []
+    lines.append(f"📊 技术分析报告 | {symbol} ({exchange.upper()})")
+    lines.append(f"⏰ 周期: {timeframe} | 💰 价格: {price:,.2f}")
+    lines.append(f"📈 7日: {chg7:+.2f}% | 30日: {chg30:+.2f}%")
+    lines.append("")
+
+    # 关键价位
+    lines.append("📍 关键价位:")
+    lines.append(f"  7日区间: {levels['low_7d']:,.2f} ~ {levels['high_7d']:,.2f}")
+    lines.append(f" 30日区间: {levels['low_30d']:,.2f} ~ {levels['high_30d']:,.2f}")
+    lines.append("")
+
+    # 各引擎信号
+    lines.append("🔬 引擎信号:")
+    for name, label, _ in details:
+        lines.append(f"  {name}: {label}")
+
+    # 综合判定
+    lines.append("")
+    if final == 1:
+        lines.append("✅ 综合判定: 偏多 — 多数引擎看涨")
+    elif final == -1:
+        lines.append("❌ 综合判定: 偏空 — 多数引擎看跌")
+    else:
+        lines.append("⚪ 综合判定: 中性 — 信号分歧或无明确方向")
+
+    lines.append("")
+    lines.append("⚠ 以上为技术面参考，不构成投资建议。")
+
+    return "\n".join(lines)
+
+
+# ── 数据获取 ──
 
 def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
-               limit: int = 200) -> pd.DataFrame:
-    """获取 OHLCV 数据（基于 quantdata 数据源）"""
+               limit: int = 200, proxy: str = None) -> pd.DataFrame:
+    """获取 OHLCV 数据"""
     symbol_upper = symbol.upper().replace("-", "/")
 
-    # ── 加密货币：通过 quantdata/ccxtdata 或 ccxt ──
+    # 加密货币通过 ccxt
     if exchange in ("binance", "okx", "bybit", "gate", "htx", "kucoin", "bitget"):
         try:
             import ccxt
+            config = {"enableRateLimit": True}
+            if proxy:
+                config["proxies"] = {"http": proxy, "https": proxy}
             ex_class = getattr(ccxt, exchange)
-            ex = ex_class({"enableRateLimit": True})
+            ex = ex_class(config)
             ohlcv = ex.fetch_ohlcv(symbol_upper, timeframe=timeframe, limit=limit)
             df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
@@ -146,7 +172,25 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"ccxt 获取失败: {e}", file=sys.stderr)
 
-    # ── A股：通过 quantdata/aksharedata 或 akshare ──
+    # CoinGecko 作为加密货币 fallback
+    if exchange in ("binance", "okx", "coingecko") and "/" in symbol_upper:
+        try:
+            import requests
+            coin_id = symbol_upper.split("/")[0].lower()
+            url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
+            params = {"vs_currency": "usd", "days": limit}
+            resp = requests.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            df = pd.DataFrame(data, columns=["timestamp", "open", "high", "low", "close"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df.set_index("timestamp", inplace=True)
+            df["volume"] = 0.0
+            return df.tail(limit)
+        except Exception as e:
+            print(f"CoinGecko 获取失败: {e}", file=sys.stderr)
+
+    # A股通过 akshare
     if exchange == "akshare":
         try:
             import akshare as ak
@@ -162,7 +206,7 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"akshare 获取失败: {e}", file=sys.stderr)
 
-    # ── 美股/港股/期货：通过 quantdata/yfinancedata 或 yfinance ──
+    # 美股通过 yfinance
     if exchange == "yfinance":
         try:
             import yfinance as yf
@@ -176,280 +220,55 @@ def fetch_data(symbol: str, exchange: str = "binance", timeframe: str = "1d",
         except Exception as e:
             print(f"yfinance 获取失败: {e}", file=sys.stderr)
 
-    # ── 自动检测：加密货币符号自动用 ccxt ──
-    if "/" in symbol_upper or symbol_upper.startswith("BTC"):
-        try:
-            import ccxt
-            ex = ccxt.binance({"enableRateLimit": True})
-            ohlcv = ex.fetch_ohlcv(symbol_upper, timeframe=timeframe, limit=limit)
-            df = pd.DataFrame(ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            df.set_index("timestamp", inplace=True)
-            return df
-        except Exception as e:
-            print(f"自动 ccxt 获取失败: {e}", file=sys.stderr)
-
-    raise RuntimeError(
-        f"无法从 {exchange} 获取 {symbol} 的数据\n"
-        f"支持的 exchange: binance, okx, akshare, yfinance\n"
-        f"量化数据源位于: {QUANTDATA_DIR}"
-    )
+    raise RuntimeError(f"无法从 {exchange} 获取 {symbol} 的数据")
 
 
-# ── 报告生成 ──────────────────────────────────────────────
-
-def run_engines(engines: Dict[str, object], data_map: Dict[str, pd.DataFrame]) -> Dict[str, Dict]:
-    """运行所有引擎，收集结果"""
-    results = {}
-    for eid, engine in engines.items():
-        info = ENGINE_REGISTRY[eid]
-        try:
-            signals = engine.generate(data_map)
-            # 取第一个 symbol 的信号
-            for sym, sig in signals.items():
-                latest = sig.iloc[-1] if len(sig) > 0 else 0
-                recent = sig.tail(10)
-                bull_count = int((recent == 1).sum())
-                bear_count = int((recent == -1).sum())
-                results[eid] = {
-                    "name": info["name"],
-                    "signal": int(latest),
-                    "bull_count": bull_count,
-                    "bear_count": bear_count,
-                    "series": sig,
-                }
-                break
-        except Exception as e:
-            print(f"  ⚠️  {info['name']} 运行失败: {e}", file=sys.stderr)
-    return results
-
-
-def compute_key_levels(df: pd.DataFrame) -> Dict:
-    """计算关键价位"""
-    close = df["close"].iloc[-1]
-    high = df["high"]
-    low = df["low"]
-
-    # 近期高低点
-    recent_high = high.tail(20).max()
-    recent_low = low.tail(20).min()
-
-    # 布林带
-    sma20 = df["close"].rolling(20).mean().iloc[-1]
-    std20 = df["close"].rolling(20).std().iloc[-1]
-    bb_upper = sma20 + 2 * std20
-    bb_lower = sma20 - 2 * std20
-
-    return {
-        "close": close,
-        "recent_high": recent_high,
-        "recent_low": recent_low,
-        "bb_upper": bb_upper,
-        "bb_middle": sma20,
-        "bb_lower": bb_lower,
-    }
-
-
-def format_report(symbol: str, exchange: str, timeframe: str,
-                  results: Dict[str, Dict], levels: Dict,
-                  fmt: str = "text") -> str:
-    """格式化报告"""
-    if fmt == "json":
-        return _format_json(symbol, exchange, timeframe, results, levels)
-
-    lines = []
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    # 标题
-    lines.append(f"═══ {symbol} 技术分析报告 ═══")
-    lines.append(f"时间: {now} | 周期: {timeframe} | 收盘: {levels['close']:,.2f}")
-    lines.append("")
-
-    # 综合信号
-    total_score = 0
-    bull_engines = []
-    bear_engines = []
-    neutral_engines = []
-
-    for eid, r in results.items():
-        sig = r["signal"]
-        weight = ENGINE_REGISTRY[eid]["weight"]
-        total_score += sig * weight
-        if sig > 0:
-            bull_engines.append(r["name"])
-        elif sig < 0:
-            bear_engines.append(r["name"])
-        else:
-            neutral_engines.append(r["name"])
-
-    max_score = sum(ENGINE_REGISTRY[eid]["weight"] for eid in results)
-
-    if total_score >= max_score * 0.5:
-        verdict = "强烈看多 🟢🟢"
-    elif total_score >= max_score * 0.2:
-        verdict = "偏多 🟢"
-    elif total_score <= -max_score * 0.5:
-        verdict = "强烈看空 🔴🔴"
-    elif total_score <= -max_score * 0.2:
-        verdict = "偏空 🔴"
-    else:
-        verdict = "中性/震荡 ⚖️"
-
-    lines.append("── 1. 综合信号 ──────────────")
-    lines.append(f"看多: {', '.join(bull_engines) if bull_engines else '无'}")
-    lines.append(f"看空: {', '.join(bear_engines) if bear_engines else '无'}")
-    lines.append(f"中性: {', '.join(neutral_engines) if neutral_engines else '无'}")
-    lines.append(f"综合评分: {total_score:+.1f} (范围 {-max_score:.0f} ~ +{max_score:.0f}) → {verdict}")
-    lines.append("")
-
-    # 各引擎详情
-    section_num = 2
-    for eid, r in results.items():
-        sig = r["signal"]
-        sig_text = {1: "看多 ✅", -1: "看空 ❌", 0: "中性 ⚖️"}.get(sig, "未知")
-
-        lines.append(f"── {section_num}. {r['name']} ──────────────")
-        lines.append(f"  当前信号: {sig_text}")
-        lines.append(f"  近10期: {r['bull_count']}看多 / {r['bear_count']}看空")
-
-        # 各引擎特色信息
-        if eid == "ichimoku":
-            series = r["series"]
-            if len(series) > 0:
-                lines.append(f"  价格与云带: {'云上方(看多)' if series.iloc[-1] > 0 else '云下方(看空)' if series.iloc[-1] < 0 else '云中(观望)'}")
-
-        if eid == "technical-basic":
-            series = r["series"]
-            if len(series) > 0:
-                # 显示最近趋势
-                recent = series.tail(5)
-                trend = "上升" if (recent.diff() > 0).all() else "下降" if (recent.diff() < 0).all() else "波动"
-                lines.append(f"  近5期趋势: {trend}")
-
-        lines.append("")
-        section_num += 1
-
-    # 关键价位
-    lines.append(f"── {section_num}. 关键价位 ──────────────")
-    lines.append(f"  强阻力: {levels['recent_high']:,.2f} (近20日高点)")
-    lines.append(f"  弱阻力: {levels['bb_upper']:,.2f} (BB上轨)")
-    lines.append(f"  当前价: {levels['close']:,.2f}")
-    lines.append(f"  弱支撑: {levels['bb_lower']:,.2f} (BB下轨)")
-    lines.append(f"  强支撑: {levels['recent_low']:,.2f} (近20日低点)")
-    lines.append("")
-
-    return "\n".join(lines)
-
-
-def _format_json(symbol, exchange, timeframe, results, levels):
-    """JSON 格式输出"""
-    import json
-    data = {
-        "symbol": symbol,
-        "exchange": exchange,
-        "timeframe": timeframe,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "close": levels["close"],
-        "signals": {},
-        "levels": levels,
-    }
-    for eid, r in results.items():
-        data["signals"][eid] = {
-            "name": r["name"],
-            "signal": r["signal"],
-            "bull_count": r["bull_count"],
-            "bear_count": r["bear_count"],
-        }
-    return json.dumps(data, indent=2, ensure_ascii=False)
-
-
-# ── 主入口 ──────────────────────────────────────────────
+# ── CLI ──
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="综合技术分析报告生成器 — 整合7大技术分析体系",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  %(prog)s BTC/USDT                                  # BTC日线综合报告
-  %(prog)s BTC/USDT -e okx -t 4h                     # OKX 4小时线
-  %(prog)s 000001.SZ -e akshare                       # A股平安银行
-  %(prog)s ETH/USDT --engines candlestick,ichimoku    # 只跑K线+一目
-  %(prog)s BTC/USDT --format json                     # JSON输出
-        """,
-    )
-
-    parser.add_argument("symbol", nargs="?", help="标的代码 (如 BTC/USDT, 000001.SZ)")
-    parser.add_argument("-e", "--exchange", default="binance",
-                        help="数据源 (binance/okx/akshare/yfinance, 默认: binance)")
-    parser.add_argument("-t", "--timeframe", default="1d",
-                        help="K线周期 (1m/5m/15m/1h/4h/1d/1w, 默认: 1d)")
-    parser.add_argument("-l", "--limit", type=int, default=200,
-                        help="获取K线数量 (默认: 200)")
-    parser.add_argument("--engines", default=None,
-                        help="指定引擎 (逗号分隔, 默认全部)")
-    parser.add_argument("--format", choices=["text", "markdown", "json"],
-                        default="text", help="输出格式 (默认: text)")
+    parser = argparse.ArgumentParser(description="技术分析综合报告")
+    parser.add_argument("symbol", nargs="?", help="标的代码，如 BTC/USDT, 000001, AAPL")
+    parser.add_argument("--exchange", "-e", default="binance",
+                        help="交易所: binance/okx/bybit/akshare/yfinance (默认 binance)")
+    parser.add_argument("--timeframe", "-t", default="1d",
+                        help="K线周期: 1m/5m/15m/1h/4h/1d/1w (默认 1d)")
+    parser.add_argument("--limit", "-n", type=int, default=200,
+                        help="K线数量 (默认 200)")
+    parser.add_argument("--engines", nargs="*",
+                        help="指定引擎，默认全部。可选: candlestick chanlun elliott_wave harmonic ichimoku smc technical_basic")
     parser.add_argument("--list-engines", action="store_true",
                         help="列出所有可用引擎")
-
+    parser.add_argument("--proxy", "-p", default=None,
+                        help="HTTP(S) 代理，如 http://127.0.0.1:7890")
     args = parser.parse_args()
 
-    # 列出引擎
     if args.list_engines:
         print("可用引擎:")
-        for eid, info in ENGINE_REGISTRY.items():
-            deps = info.get("deps", [])
-            dep_str = f" (需要: {','.join(deps)})" if deps else ""
-            print(f"  {eid:<20} {info['name']:<10}{dep_str}")
+        for name in ENGINE_NAMES:
+            desc = ENGINE_DESCRIPTIONS[name]
+            print(f"  {name:20s} {desc}")
         return
 
     if not args.symbol:
-        parser.error("请指定标的代码 (如 BTC/USDT)")
-
-    # 确定引擎列表
-    if args.engines:
-        engine_ids = [e.strip() for e in args.engines.split(",")]
-        for eid in engine_ids:
-            if eid not in ENGINE_REGISTRY:
-                print(f"错误: 未知引擎 '{eid}'", file=sys.stderr)
-                print(f"可用: {', '.join(ENGINE_REGISTRY.keys())}", file=sys.stderr)
-                sys.exit(1)
-    else:
-        engine_ids = list(ENGINE_REGISTRY.keys())
+        parser.error("请提供标的代码，如 BTC/USDT")
 
     # 加载引擎
-    print(f"加载引擎...", file=sys.stderr)
-    engines = load_engines(engine_ids)
+    engines = load_engines(args.engines)
     if not engines:
-        print("错误: 没有可用的引擎", file=sys.stderr)
+        print("❌ 无可用引擎", file=sys.stderr)
         sys.exit(1)
-    print(f"已加载: {', '.join(ENGINE_REGISTRY[eid]['name'] for eid in engines)}", file=sys.stderr)
 
-    # 获取数据
-    print(f"获取数据: {args.symbol} @ {args.exchange} ({args.timeframe})...", file=sys.stderr)
-    try:
-        df = fetch_data(args.symbol, args.exchange, args.timeframe, args.limit)
-    except Exception as e:
-        print(f"错误: {e}", file=sys.stderr)
-        sys.exit(1)
-    print(f"获取 {len(df)} 根K线", file=sys.stderr)
+    print(f"⏳ 获取 {args.symbol} 数据 ({args.exchange}, {args.timeframe})...")
+    df = fetch_data(args.symbol, args.exchange, args.timeframe, args.limit, proxy=args.proxy)
+    print(f"✅ 获取 {len(df)} 根K线")
 
-    # 构建 data_map（引擎要求 Dict[symbol, DataFrame]）
     data_map = {args.symbol: df}
-
-    # 运行引擎
-    print(f"运行分析...", file=sys.stderr)
+    print(f"⏳ 运行 {len(engines)} 个引擎...")
     results = run_engines(engines, data_map)
 
-    # 计算关键价位
     levels = compute_key_levels(df)
-
-    # 生成报告
-    report = format_report(
-        args.symbol, args.exchange, args.timeframe,
-        results, levels, args.format
-    )
+    report = format_report(args.symbol, args.exchange, args.timeframe, results, levels)
+    print()
     print(report)
 
 

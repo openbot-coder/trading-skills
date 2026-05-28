@@ -1,148 +1,120 @@
 ---
 name: tech-analysis
-description: 综合技术分析报告生成器 | 整合7大技术分析体系（K线形态/缠论/艾略特波浪/谐波/一目均衡/SMC/基础指标）| 一键生成多维度技术面报告
-version: 1.0.0
-author: quantdata
-tags:
-  - technical-analysis
-  - report
-  - candlestick
-  - elliott-wave
-  - harmonic
-  - ichimoku
-  - smc
-  - chanlun
-  - indicator
-supported_markets:
-  - A股
-  - 港股
-  - 美股
-  - 加密货币
-  - 期货
+version: 2.0.0
+description: 整合7大技术分析引擎生成综合报告 | K线形态/缠论/波浪/谐波/一目均衡/SMC/基础指标
+license: MIT
 ---
 
-# Tech Analysis — 综合技术分析报告
+# 技术分析综合报告
 
-整合 7 大技术分析体系，一键生成多维度技术面报告。
+整合 7 大技术分析引擎，对指定标的生成综合技术面报告。支持加密货币、A股、美股、期货。
 
-## 技术分析体系
-
-| 体系 | 来源 | 核心方法 | 信号类型 |
-|------|------|---------|---------|
-| **K线形态** | candlestick | 15种经典蜡烛图形态 | 反转/持续 |
-| **缠论** | chanlun | 分型→笔→中枢→买卖点 | 结构性买卖点 |
-| **艾略特波浪** | elliott-wave | 5浪推动+3浪调整 | 趋势/调整 |
-| **谐波形态** | harmonic | XABCD五点+Fibonacci | PRZ反转 |
-| **一目均衡** | ichimoku | 五线+云带 | 趋势确认 |
-| **SMC/ICT** | smc | BOS/ChoCH/FVG/OB | 机构行为 |
-| **基础指标** | technical-basic | EMA/ADX/BB/RSI/OBV | 趋势/超买超卖/量价 |
-
-## 命令用法
+## 使用方法
 
 ```bash
-# 生成综合技术分析报告（默认日线）
-python3 {base}/scripts/ta_report.py BTC/USDT
-python3 {base}/scripts/ta_report.py BTC/USDT --exchange okx --timeframe 4h
+# 全引擎分析（默认）
+python3 scripts/ta_report.py BTC/USDT -e binance -t 1d
 
-# A股
-python3 {base}/scripts/ta_report.py 000001.SZ --exchange akshare
+# A股分析
+python3 scripts/ta_report.py 000001 -e akshare
 
-# 指定输出格式
-python3 {base}/scripts/ta_report.py BTC/USDT --format markdown
-python3 {base}/scripts/ta_report.py BTC/USDT --format json
+# 美股分析
+python3 scripts/ta_report.py AAPL -e yfinance
 
-# 选择性分析（只跑部分体系）
-python3 {base}/scripts/ta_report.py BTC/USDT --engines candlestick,technical-basic,ichimoku
+# 指定引擎
+python3 scripts/ta_report.py BTC/USDT --engines candlestick smc technical-basic
+
+# 列出所有引擎
+python3 scripts/ta_report.py --list-engines
 ```
 
-## 报告结构
+## 参数说明
 
-```
-═══ BTC/USDT 技术分析报告 ═══
-时间: 2026-05-28 | 周期: 1d | 收盘: 68,452.30
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| symbol | 标的代码 | 必填 |
+| --exchange, -e | 交易所 | binance |
+| --timeframe, -t | K线周期 | 1d |
+| --limit, -n | K线数量 | 200 |
+| --engines | 指定引擎 | 全部 |
+| --list-engines | 列出引擎 | - |
 
-── 1. 综合信号 ──────────────
-多空比: 5看多 / 2看空 / 0中性 → 偏多 ✅
-综合评分: +3 (范围 -7 ~ +7)
+## 引擎列表
 
-── 2. K线形态 ──────────────
-最新形态: 看涨吞没 (Bullish Engulfing) → +1
-近期形态: 锤子线 (Hammer) @ 05-25 → +1
-
-── 3. 缠论 ──────────────
-当前: 日线三买形成中
-中枢: [67200, 68800]
-最近买卖点: 二买 @ 67,450 (05-22)
-
-── 4. 艾略特波浪 ──────────────
-当前结构: 第3浪上升中
-Fibonacci目标: 70,200 (1.618×浪1)
-
-── 5. 谐波形态 ──────────────
-检测到: 看涨Bat形态 (D点未到)
-PRZ区域: 66,800 ~ 67,500
-
-── 6. 一目均衡 ──────────────
-云带位置: 价格在云上方 → 看多
-TK交叉: 金叉 (05-20)
-云带方向: 上升
-
-── 7. SMC/ICT ──────────────
-最近BOS: 看涨BOS (05-26) → +1
-ChoCH: 无
-FVG: 看涨FVG @ 67,100 ~ 67,800
-
-── 8. 基础指标 ──────────────
-趋势: EMA12>EMA26, ADX=28 (强趋势)
-均值回归: RSI=62, BB中轨上方
-量价: OBV上升, 量比1.2
-投票: 看多 (+2)
-
-── 9. 关键价位 ──────────────
-强阻力: 70,200 (Fib 1.618 + 前高)
-弱阻力: 69,000
-当前价: 68,452
-弱支撑: 67,500 (BB中轨 + FVG下沿)
-强支撑: 66,800 (谐波PRZ + 缠论中枢)
-```
-
-## 信号汇总规则
-
-每个引擎输出 `+1`(看多) / `-1`(看空) / `0`(中性)，最终汇总：
-
-| 综合评分 | 含义 |
-|---------|------|
-| +5 ~ +7 | 强烈看多 |
-| +2 ~ +4 | 偏多 |
-| -1 ~ +1 | 中性/震荡 |
-| -4 ~ -2 | 偏空 |
-| -7 ~ -5 | 强烈看空 |
-
-## 数据源要求
-
-脚本需要获取 OHLCV 数据，支持以下数据源（按优先级）：
-
-| 数据源 | 市场 | 需要Key |
-|--------|------|---------|
-| akshare | A股 | ❌ |
-| ccxt | 加密货币 | ❌ |
-| okxdata | 加密货币 | ❌ |
-| binancedata | 加密货币 | ❌ |
-| yfinance | 美股/港股 | ❌ |
-| tushare | A股 | ✅ |
+| 引擎 | 说明 | 依赖 |
+|------|------|------|
+| candlestick | 15 种经典蜡烛图形态 | 无 |
+| chanlun | 分型→笔→中枢→买卖点 | czsc |
+| elliott-wave | 5 浪推动 + 3 浪调整 | 无 |
+| harmonic | Gartley/Bat/Butterfly/Crab XABCD 五点形态 | 无 |
+| ichimoku | 五线系统 + 云带过滤 | 无 |
+| smc | BOS/ChoCH 结构突破 + FVG 缺口 | smartmoneyconcepts |
+| technical-basic | EMA/RSI/BB/ADX/OBV 投票 | 无 |
 
 ## 依赖
 
-- Python >= 3.10
-- pandas, numpy
-- czsc（缠论，可选）
-- smartmoneyconcepts（SMC，可选）
+```bash
+pip install pandas numpy czsc smartmoneyconcepts
+# 加密货币数据
+pip install ccxt
+# A股数据
+pip install akshare
+# 美股数据
+pip install yfinance
+```
 
-缺少可选依赖时，对应引擎自动跳过，不影响其他分析。
+## 架构
 
-## 使用场景
+```
+skills/tech-analysis/
+├── SKILL.md              # 本文件
+├── engines/              # 7 个独立信号引擎
+│   ├── candlestick.py    # K线形态识别
+│   ├── chanlun.py        # 缠论信号
+│   ├── elliott_wave.py   # 艾略特波浪
+│   ├── harmonic.py       # 谐波形态
+│   ├── ichimoku.py       # 一目均衡
+│   ├── smc.py            # SMC/ICT
+│   └── technical_basic.py # 基础指标
+└── scripts/
+    └── ta_report.py      # 报告生成器
+```
 
-- **每日复盘**：收盘后跑一次，快速了解多空格局
-- **入场决策**：交易前检查多体系是否共振
-- **风控预警**：关注看空信号占比
-- **研报素材**：导出 markdown 格式作为研报附件
+## 信号约定
+
+- `1` = 做多 🟢
+- `-1` = 做空 🔴
+- `0` = 观望 ⚪
+
+## 输出示例
+
+```
+📊 技术分析报告 | BTC/USDT (BINANCE)
+⏰ 周期: 1d | 💰 价格: 108,433.57
+📈 7日: -3.17% | 30日: +5.27%
+
+📍 关键价位:
+  7日区间: 106,150.00 ~ 111,850.00
+ 30日区间: 102,000.00 ~ 111,850.00
+
+🔬 引擎信号:
+  K线形态: 观望 ⚪
+  缠论: 观望 ⚪
+  艾略特波浪: 观望 ⚪
+  谐波形态: 做多 🟢
+  一目均衡: 观望 ⚪
+  SMC/ICT: 观望 ⚪
+  基础指标: 做多 🟢
+
+✅ 综合判定: 偏多 — 多数引擎看涨
+
+⚠ 以上为技术面参考，不构成投资建议。
+```
+
+## 脚本路径
+
+本 skill 位于 `skills/tech-analysis/`。脚本通过 `__import__` 从本地 `engines/` 目录加载引擎，无需外部路径依赖。
+
+---
+
+*引擎来源: Vibe-Trading 项目 (HKUDS)*
