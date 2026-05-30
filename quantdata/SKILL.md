@@ -39,6 +39,9 @@ supported_markets:
 | **港股股票** | 港股、腾讯控股、hk00700 | westockdata / futuopendata / yfinancedata |
 | **美股股票** | 美股、苹果、AAPL | yfinancedata / westockdata / futuopendata |
 | **国际期货** | 黄金、原油、白银、hf_GC、hf_CL | crawldata / yfinancedata |
+| **期货合约元数据** | 保证金、手续金、交割日、合约乘数 | openctpdata ⭐ | AKShare / 新浪 |
+| **期货交易时段** | 夜盘、日盘、午间休市时间 | openctpdata ⭐ | — |
+| **期货品种/交易所** | 品种列表、交易所信息 | openctpdata ⭐ | — |
 | **加密货币** | BTC、比特币、ETH、以太坊、加密货币 | coingeckodata / okxdata / binancedata / yfinancedata |
 | **K线数据** | K线、kline、日线、周线、月线 | 根据市场自动路由 |
 | **实时行情** | 行情、实时、quote、价格 | crawldata / westockdata / futuopendata |
@@ -69,6 +72,7 @@ supported_markets:
 
 | 子技能 | 数据类型 | 市场覆盖 | 优势 |
 |--------|---------|---------|------|
+| **openctpdata** | OpenCTP数据中心 | 国内期货/期权/股票 | 品种/合约/时段/交易所元数据，免费无限制 |
 | **crawldata** | 腾讯财经爬虫 | A股/指数/国际期货 | 无限制、全字段解析、快速 |
 | **westockdata** | 腾讯自选股 | A股/港股/美股 | 实时行情、技术指标 |
 | **baostockdata** | 证券宝 | A股 | 1990年至今历史数据、无限制 |
@@ -94,6 +98,8 @@ supported_markets:
 | **港股** | `hk`前缀、5位数字 | westockdata | futuopendata / yfinancedata |
 | **美股** | 纯字母、NYSE/NASDAQ | yfinancedata | westockdata / futuopendata |
 | **国际期货** | `hf_`前缀、黄金/原油/白银 | crawldata | yfinancedata |
+| **期货元数据** | 保证金/手续费/交割日/合约乘数 | openctpdata | — |
+| **交易时段** | 夜盘/日盘/午间时段 | openctpdata | — |
 | **加密货币** | BTC/ETH/币安/OKX | coingeckodata / ccxtdata | okxdata / binancedata / yfinancedata |
 
 ### 2. 按数据类型路由
