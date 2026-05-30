@@ -47,7 +47,16 @@ python3 scripts/ta_report.py --list-engines
 | --list-engines | 列出引擎 | - |
 | --proxy, -p | HTTP(S)代理 | - |
 
-## CSV 数据准备
+## 数据获取与搜索分工
+
+⚠️ **K线行情数据和市场分析观点使用不同工具，严格分工：**
+
+| 用途 | 工具 | 说明 |
+|------|------|------|
+| **K线行情数据 (OHLCV)** | quantdata 系列脚本 | 精确价格数据，速度快，不要用搜索替代 |
+| **市场观点/研报/舆情** | web-search skill | 多引擎并行搜索，获取分析师观点和市场情绪 |
+
+### K线数据准备
 
 推荐工作流：用 quantdata 工具下载 CSV，再离线分析。
 
@@ -55,8 +64,28 @@ python3 scripts/ta_report.py --list-engines
 |---------|---------|---------|
 | 加密货币 | ccxtdata | `ccxt_data.py kline BTC/USDT -e okx -t 1d -l 200 > btc.csv` |
 | A股 | baostockdata | `baostock.py kline sz.002050 --start 2025-01-01 > 002050.csv` |
+| A股指数 | crawldata | `get_quote.py --kline sh000300` |
 | 美股 | yfinancedata | `get_kline.py AAPL --period 1y --interval 1d > aapl.csv` |
 | A股(实时) | aksharedata | `akshare.py stock_zh_a_hist 002050 --period daily > 002050.csv` |
+
+> 详见 `quantdata/README_SCRIPTS.md` 了解各数据源完整用法。
+
+### 市场信息搜索（web-search）
+
+需要获取市场分析观点、研报摘要、板块轮动、资金流向等**非价格数据**时，使用 web-search skill：
+
+```bash
+# 多引擎并行搜索（推荐，快）
+web-search search "沪深300 技术分析 均线 支撑阻力" --json
+
+# 深度研究（多轮搜索）
+web-search deep "沪深300 走势研判 后市展望"
+
+# 股票专用搜索
+web-search stock "贵州茅台 资金流向"
+```
+
+> 详见 `skills/web-search/SKILL.md`。支持 28 个搜索引擎并行抓取。
 
 CSV 自动识别列名 (中英文均支持):
 - 英文: `date/time/timestamp, open, high, low, close, volume`
@@ -134,6 +163,26 @@ skills/tech-analysis/
 
 ⚠ 以上为技术面参考，不构成投资建议。
 ```
+
+## 完整工作流示例
+
+```
+用户: "分析沪深300走势"
+
+Step 1 - 获取K线数据 (quantdata, 快):
+  python3 quantdata/crawldata/scripts/get_quote.py --kline sh000300 > /tmp/hs300.csv
+
+Step 2 - 运行技术引擎 (本地计算, 快):
+  python3 scripts/ta_report.py --csv /tmp/hs300.csv 沪深300
+
+Step 3 - 搜索市场观点 (web-search, 多路并行快):
+  web-search search "沪深300 走势研判 均线支撑" --json
+  web-search search "A股 板块轮动 资金流向" --json
+
+Step 4 - 综合引擎信号 + 市场观点，输出报告
+```
+
+⚠️ **禁止用 web-search 获取K线价格数据**——慢且不准，必须用 quantdata。
 
 ## 脚本路径
 
